@@ -1,0 +1,71 @@
+tracker_version: "0.1"
+
+tasks:
+  - id: "S01"
+    title: "Structural Refactor (Split Monolith)"
+    intent: "Move code from deep_researcher.py into modular node files without changing logic."
+    allowed_files:
+      - "src/open_deep_research/deep_researcher.py"
+      - "src/open_deep_research/nodes/*.py"
+      - "src/open_deep_research/graph.py"
+    acceptance_criteria:
+      - "deep_researcher.py is removed or empty"
+      - "Graph compiles and runs from new structure"
+      - "No logic changes, just file movements"
+    proof_command: "python -m src.cli --help"
+
+  - id: "S02"
+    title: "Implement Trust Store & Gating"
+    intent: "Enable LangGraph Store for raw content and add gating node."
+    allowed_files:
+      - "src/open_deep_research/nodes/store.py"
+      - "src/open_deep_research/tools/search.py"
+      - "src/open_deep_research/state.py"
+    acceptance_criteria:
+      - "Tavily tool writes raw_content to Store"
+      - "check_store node correctly sets verified_disabled flag"
+      - "State includes verified_disabled field"
+
+  - id: "S03"
+    title: "Implement Evidence Extraction"
+    intent: "Create deterministic node to mine quotes from stored raw content."
+    allowed_files:
+      - "src/open_deep_research/nodes/extract.py"
+      - "src/open_deep_research/logic/sanitize.py"
+    acceptance_criteria:
+      - "HTML sanitizer preserves paragraph structure"
+      - "Extractor returns snippets with 15-60 words"
+      - "Reads from Store, does not rely on LLM for extraction"
+
+  - id: "S04"
+    title: "Implement Verification Logic"
+    intent: "Create node to verify quotes exist in source text."
+    allowed_files:
+      - "src/open_deep_research/nodes/verify.py"
+    acceptance_criteria:
+      - "verify_evidence node checks substring presence"
+      - "Snippets marked PASS/FAIL correctly"
+      - "Fuzzy matching works for minor whitespace differences"
+
+  - id: "S05"
+    title: "Wire Graph & Report Selector"
+    intent: "Connect new nodes and update report generation prompt."
+    allowed_files:
+      - "src/open_deep_research/graph.py"
+      - "src/open_deep_research/nodes/report.py"
+      - "src/open_deep_research/prompts/report.py"
+    acceptance_criteria:
+      - "Graph flow: compress -> extract -> verify -> report"
+      - "Final report prompt enforces 'Selector' mode for Verified section"
+      - "Report contains verbatim quotes + URLs"
+
+  - id: "S06"
+    title: "E2E Verification"
+    intent: "Run full research pass and verify artifacts."
+    allowed_files:
+      - "tests/e2e.py"
+    acceptance_criteria:
+      - "CLI completes a full run"
+      - "Report generated with Verified Findings section"
+      - "Logs show 'PASS' verification events"
+

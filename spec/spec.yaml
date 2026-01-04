@@ -1,0 +1,55 @@
+spec_version: "0.1"
+project_slug: "deep-research-v0"
+
+architecture:
+  stack:
+    - "Python 3.11+"
+    - "LangGraph (Orchestration & State Management)"
+    - "LangGraph Store (InMemory or SQLite for Raw Content)"
+    - "Tavily API (Search & Extraction)"
+    - "Click (CLI Interface)"
+  
+  components:
+    - name: "CLI Runner"
+      responsibility: "Entrypoint, configuration loading, async graph execution loop"
+      path: "src/cli.py"
+
+    - name: "Research Graph"
+      responsibility: "Main state machine orchestrating clarification, research, verification, and reporting"
+      path: "src/open_deep_research/graph.py"
+
+    - name: "Trust Engine"
+      responsibility: "Deterministic extraction and verification of quotes against raw content"
+      path: "src/open_deep_research/nodes/verify.py"
+
+data_models:
+  - name: "SourceRecord"
+    description: "Metadata for a discovered source"
+    fields:
+      - "source_id (str): Unique hash of URL"
+      - "url (str): Source URL"
+      - "title (str): Page title"
+      - "has_raw_content (bool): Whether full HTML was successfully stored"
+
+  - name: "EvidenceSnippet"
+    description: "A candidate or verified quote"
+    fields:
+      - "snippet_id (str): Unique ID"
+      - "source_id (str): Reference to SourceRecord"
+      - "quote (str): Verbatim text (15-60 words)"
+      - "status (str): PENDING | PASS | FAIL | SKIP"
+
+  - name: "ResearchState"
+    description: "Global graph state (TypedDict)"
+    fields:
+      - "research_brief (str): The plan"
+      - "sources (List[SourceRecord]): Deduped sources"
+      - "evidence_snippets (List[EvidenceSnippet]): Extracted quotes"
+      - "verified_disabled (bool): Safety flag if Store unavailable"
+
+interfaces:
+  - "sanitize_for_quotes(html: str) -> str"
+  - "extract_evidence(html: str, rules: ExtractionRules) -> List[str]"
+  - "verify_substring(quote: str, raw_text: str) -> bool"
+  - "selector_prompt(evidence: List[EvidenceSnippet]) -> str"
+
