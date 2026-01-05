@@ -118,9 +118,36 @@ async def extract_evidence(state: AgentState, config: RunnableConfig) -> dict:
     print(f"[EXTRACT] ✓ Extracted {len(all_snippets)} candidate quotes")
 
     # Limit to reasonable number to prevent state bloat
+    # Use round-robin selection to ensure diversity across sources
     max_snippets = 100
     if len(all_snippets) > max_snippets:
         logging.warning(f"[EXTRACT] Limiting to {max_snippets} snippets (had {len(all_snippets)})")
-        all_snippets = all_snippets[:max_snippets]
+
+        # Group by source for diversity
+        from collections import defaultdict
+        by_source = defaultdict(list)
+        for snippet in all_snippets:
+            source_url = snippet.get("source_id", snippet.get("url", "unknown"))
+            by_source[source_url].append(snippet)
+
+        # Round-robin selection across sources
+        diverse_snippets = []
+        source_urls = list(by_source.keys())
+        round_num = 0
+        max_per_source = max(5, max_snippets // len(source_urls) + 1) if source_urls else 5
+
+        while len(diverse_snippets) < max_snippets:
+            added_this_round = False
+            for url in source_urls:
+                if round_num < len(by_source[url]) and len(diverse_snippets) < max_snippets:
+                    diverse_snippets.append(by_source[url][round_num])
+                    added_this_round = True
+            if not added_this_round:
+                break
+            round_num += 1
+
+        all_snippets = diverse_snippets
+        unique_sources = len(set(s.get("source_id", s.get("url", "")) for s in all_snippets))
+        logging.info(f"[EXTRACT] Selected {len(all_snippets)} snippets from {unique_sources} sources")
 
     return {"evidence_snippets": all_snippets}
