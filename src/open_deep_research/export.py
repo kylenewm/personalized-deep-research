@@ -129,13 +129,13 @@ def get_pdf_stylesheet(config: ExportConfig) -> str:
 
     /* Title */
     h1 {{
-        font-size: 26pt;
-        font-weight: 700;
+        font-size: 18pt;
+        font-weight: 600;
         color: {config.primary_color};
-        border-bottom: 3px solid {config.primary_color};
-        padding-bottom: 0.4em;
+        border-bottom: 2px solid {config.primary_color};
+        padding-bottom: 0.3em;
         margin-top: 0;
-        margin-bottom: 1em;
+        margin-bottom: 0.8em;
     }}
 
     /* Section headings */

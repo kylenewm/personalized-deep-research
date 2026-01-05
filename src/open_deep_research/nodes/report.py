@@ -52,12 +52,13 @@ Generate a "## Verified Findings" section using ONLY the quotes above.
 STRICT RULES:
 1. Start with "## Verified Findings" heading
 2. Create a bullet list with 3-5 of the most relevant quotes
-3. Each bullet MUST follow this EXACT format:
+3. **DIVERSITY REQUIRED**: Select quotes from DIFFERENT sources - do not pick multiple quotes from the same URL
+4. Each bullet MUST follow this EXACT format:
    * **[Topic/Claim]** - "[EXACT QUOTE]" — [Source Title](URL)
-4. Copy quotes EXACTLY - do not paraphrase, summarize, or modify
-5. Do not add any quotes not in the list above
-6. Do not add commentary, analysis, or additional text after the quotes
-7. End the section after the bullet list
+5. Copy quotes EXACTLY - do not paraphrase, summarize, or modify
+6. Do not add any quotes not in the list above
+7. Do not add commentary, analysis, or additional text after the quotes
+8. End the section after the bullet list
 
 OUTPUT FORMAT:
 ## Verified Findings
@@ -68,11 +69,16 @@ OUTPUT FORMAT:
 """
 
 
-def format_verified_quotes(snippets: List[EvidenceSnippet]) -> str:
-    """Format verified snippets for the selector prompt.
+def format_verified_quotes(snippets: List[EvidenceSnippet], max_quotes: int = 20, max_per_source: int = 3) -> str:
+    """Format verified snippets for the selector prompt with source diversity.
+
+    Ensures quotes come from diverse sources by round-robin selection across
+    source URLs, preventing all quotes from coming from a single source.
 
     Args:
         snippets: List of evidence snippets (only PASS status will be used)
+        max_quotes: Maximum total quotes to include (default 20)
+        max_per_source: Maximum quotes from any single source (default 3)
 
     Returns:
         Formatted string of verified quotes for the prompt
@@ -82,12 +88,40 @@ def format_verified_quotes(snippets: List[EvidenceSnippet]) -> str:
     if not verified:
         return ""
 
+    # Group by source URL for diversity
+    from collections import defaultdict
+    by_source = defaultdict(list)
+    for snippet in verified:
+        url = snippet.get("url", snippet.get("source_id", "unknown"))
+        by_source[url].append(snippet)
+
+    # Round-robin selection: pick one from each source, then second from each, etc.
+    # This ensures diversity across sources
+    diverse_quotes = []
+    source_urls = list(by_source.keys())
+    round_num = 0
+
+    while len(diverse_quotes) < max_quotes and round_num < max_per_source:
+        added_this_round = False
+        for url in source_urls:
+            if round_num < len(by_source[url]) and len(diverse_quotes) < max_quotes:
+                diverse_quotes.append(by_source[url][round_num])
+                added_this_round = True
+        if not added_this_round:
+            break
+        round_num += 1
+
+    # Format for the prompt
     formatted_quotes = []
-    for i, snippet in enumerate(verified, 1):
+    for i, snippet in enumerate(diverse_quotes, 1):
         quote = snippet.get("quote", "")
         title = snippet.get("source_title", "Unknown Source")
-        url = snippet.get("url", snippet.get("source_id", ""))  # Fallback for legacy data
+        url = snippet.get("url", snippet.get("source_id", ""))
         formatted_quotes.append(f'{i}. "{quote}" - [{title}]({url})')
+
+    # Log diversity stats
+    unique_sources = len(set(s.get("url", s.get("source_id", "")) for s in diverse_quotes))
+    print(f"[VERIFIED] Selected {len(diverse_quotes)} quotes from {unique_sources} unique sources")
 
     return "\n".join(formatted_quotes)
 
