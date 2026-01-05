@@ -1,6 +1,6 @@
 # Deep Research Agent
 
-AI-powered research agent that searches the web, gathers sources, and generates verified research reports. This project signficantly expands off of LangGraph's open source deep research project. The next steps are optimizing the current codebase and then adding in personalization to filter for speed and cost among other things. 
+AI-powered research agent that searches the web, gathers sources, and generates verified research reports. Built on top of LangGraph's open source deep research project, with added quote verification, source quality filtering, and multi-model validation. 
 
 ## What it does
 
@@ -183,6 +183,8 @@ Edit `src/open_deep_research/configuration.py`:
 | `use_council` | `True` | Enable multi-model validation |
 | `use_claim_verification` | `True` | Run post-report claims check |
 | `use_tavily_extract` | `True` | Use Tavily Extract for cleaner content |
+| `max_total_sources` | `200` | Cap on sources to prevent token explosion |
+| `min_source_content_length` | `500` | Filter out thin/low-quality content |
 
 ## Project Structure
 
@@ -251,3 +253,12 @@ Use metrics to track optimization progress across runs.
   - State management
   - Anti-hallucination system
   - Key files reference
+
+## Next Steps
+
+- [ ] **Personalization layer** - Let users configure speed vs depth vs cost tradeoffs
+- [ ] **Preset profiles** - Quick settings like "fast & cheap", "thorough", "balanced"
+- [ ] **Better source ranking** - Prioritize high-quality sources over quantity
+- [ ] **Streaming output** - Show progress as research happens instead of waiting for the end
+- [ ] **Memory/context** - Remember past research to build on previous findings
+- [ ] **Multi-format export** - PDF, DOCX, etc. in addition to markdown
