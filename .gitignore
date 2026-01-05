@@ -59,6 +59,10 @@ run_report_*.md
 run_state_*.json
 mock_verification_report.md
 verification_diagnostic.md
+test_brief_output.md
+test_research_output.md
+test_research_state.json
+test_report_output.md
 
 # Jupyter
 .ipynb_checkpoints/
@@ -66,6 +70,9 @@ verification_diagnostic.md
 # Logs
 *.log
 logs/
+
+# Metrics output
+metrics/
 
 # Local development
 *.local

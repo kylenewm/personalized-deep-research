@@ -1,6 +1,7 @@
 """Researcher nodes and subgraph for the Deep Research agent."""
 
 import asyncio
+import logging
 from typing import Literal
 
 from langchain_core.messages import (
@@ -25,6 +26,7 @@ from open_deep_research.utils import (
     anthropic_websearch_called,
     get_all_tools,
     get_api_key_for_model,
+    get_cached_sources,
     get_today_str,
     is_token_limit_exceeded,
     openai_websearch_called,
@@ -121,6 +123,12 @@ async def researcher_tools(state: ResearcherState, config: RunnableConfig) -> Co
     # Step 1: Extract current state and check early exit conditions
     configurable = Configuration.from_runnable_config(config)
     researcher_messages = state.get("researcher_messages", [])
+
+    # BUG FIX: Check for empty messages before accessing [-1]
+    if not researcher_messages:
+        print("[RESEARCHER] Warning: No messages in state, proceeding to compression")
+        return Command(goto="compress_research")
+
     most_recent_message = researcher_messages[-1]
 
     # Early exit if no tool calls were made (including native web search)
@@ -179,6 +187,53 @@ async def researcher_tools(state: ResearcherState, config: RunnableConfig) -> Co
     )
 
 
+def extract_sources_from_tool_messages(messages) -> list:
+    """Extract source records from tool messages containing Tavily search results.
+
+    Parses the formatted search output to extract URLs, titles, and content
+    for later verification.
+
+    Args:
+        messages: List of messages including tool messages with search results
+
+    Returns:
+        List of source record dicts with url, title, content, extraction_method
+    """
+    import re
+    from datetime import datetime
+
+    sources = []
+    seen_urls = set()
+
+    for message in messages:
+        if not hasattr(message, 'content') or not isinstance(message.content, str):
+            continue
+
+        content = message.content
+
+        # Parse Tavily search output format:
+        # --- SOURCE N: {title} ---
+        # URL: {url}
+        # SUMMARY:
+        # {content}
+        source_pattern = r'--- SOURCE \d+: (.+?) ---\s*\nURL: (.+?)\n\n(?:SUMMARY:\n)?(.+?)(?=\n\n---|\n\n-{10,}|$)'
+        matches = re.findall(source_pattern, content, re.DOTALL)
+
+        for title, url, summary in matches:
+            url = url.strip()
+            if url and url not in seen_urls:
+                seen_urls.add(url)
+                sources.append({
+                    "url": url,
+                    "title": title.strip(),
+                    "content": summary.strip()[:50000],  # Limit content size
+                    "extraction_method": "search_parsed",
+                    "timestamp": datetime.now().isoformat()
+                })
+
+    return sources
+
+
 async def compress_research(state: ResearcherState, config: RunnableConfig):
     """Compress and synthesize research findings into a concise, structured summary.
 
@@ -191,7 +246,7 @@ async def compress_research(state: ResearcherState, config: RunnableConfig):
         config: Runtime configuration with compression model settings
 
     Returns:
-        Dictionary containing compressed research summary and raw notes
+        Dictionary containing compressed research summary, raw notes, and sources
     """
     # Step 1: Configure the compression model
     configurable = Configuration.from_runnable_config(config)
@@ -227,10 +282,23 @@ async def compress_research(state: ResearcherState, config: RunnableConfig):
                 for message in filter_messages(researcher_messages, include_types=["tool", "ai"])
             ])
 
-            # Return successful compression result
+            # Extract sources for verification
+            # Prefer cached Extract API sources (cleaner content) over parsed sources
+            cached_sources = get_cached_sources(config)
+            if cached_sources:
+                sources = cached_sources
+                logging.info(f"[RESEARCHER] Using {len(sources)} cached Extract API sources")
+            else:
+                # Fallback to parsing tool messages
+                tool_messages = filter_messages(researcher_messages, include_types=["tool"])
+                sources = extract_sources_from_tool_messages(tool_messages)
+                logging.info(f"[RESEARCHER] Using {len(sources)} parsed sources (no cache)")
+
+            # Return successful compression result with sources
             return {
                 "compressed_research": str(response.content),
-                "raw_notes": [raw_notes_content]
+                "raw_notes": [raw_notes_content],
+                "source_store": sources
             }
 
         except Exception as e:
@@ -250,9 +318,19 @@ async def compress_research(state: ResearcherState, config: RunnableConfig):
         for message in filter_messages(researcher_messages, include_types=["tool", "ai"])
     ])
 
+    # Still extract sources even if compression failed
+    # Prefer cached Extract API sources
+    cached_sources = get_cached_sources(config)
+    if cached_sources:
+        sources = cached_sources
+    else:
+        tool_messages = filter_messages(researcher_messages, include_types=["tool"])
+        sources = extract_sources_from_tool_messages(tool_messages)
+
     return {
         "compressed_research": "Error synthesizing research report: Maximum retries exceeded",
-        "raw_notes": [raw_notes_content]
+        "raw_notes": [raw_notes_content],
+        "source_store": sources
     }
 
 

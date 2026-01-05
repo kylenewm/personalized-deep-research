@@ -87,6 +87,19 @@ async def supervisor_tools(state: SupervisorState, config: RunnableConfig) -> Co
     configurable = Configuration.from_runnable_config(config)
     supervisor_messages = state.get("supervisor_messages", [])
     research_iterations = state.get("research_iterations", 0)
+
+    # BUG FIX: Check for empty messages before accessing [-1]
+    if not supervisor_messages:
+        print("[SUPERVISOR] Warning: No messages in state, ending research")
+        return Command(
+            goto=END,
+            update={
+                "notes": [],
+                "research_brief": state.get("research_brief", ""),
+                "source_store": state.get("source_store", []),
+            }
+        )
+
     most_recent_message = supervisor_messages[-1]
 
     # Define exit criteria for research phase (use effective values for test mode)
@@ -103,7 +116,8 @@ async def supervisor_tools(state: SupervisorState, config: RunnableConfig) -> Co
             goto=END,
             update={
                 "notes": get_notes_from_tool_calls(supervisor_messages),
-                "research_brief": state.get("research_brief", "")
+                "research_brief": state.get("research_brief", ""),
+                "source_store": state.get("source_store", []),  # BUG FIX: Propagate sources
             }
         )
 
@@ -149,10 +163,27 @@ async def supervisor_tools(state: SupervisorState, config: RunnableConfig) -> Co
                 for tool_call in allowed_conduct_research_calls
             ]
 
-            tool_results = await asyncio.gather(*research_tasks)
+            # BUG FIX: Protect gather with return_exceptions=True
+            tool_results_raw = await asyncio.gather(*research_tasks, return_exceptions=True)
+
+            # Filter out exceptions and log them
+            tool_results = []
+            successful_calls = []
+            for i, result in enumerate(tool_results_raw):
+                if isinstance(result, Exception):
+                    print(f"[SUPERVISOR] Research task {i} failed: {result}")
+                    # Add error message for failed research
+                    all_tool_messages.append(ToolMessage(
+                        content=f"Error: Research failed - {result}",
+                        name=allowed_conduct_research_calls[i]["name"],
+                        tool_call_id=allowed_conduct_research_calls[i]["id"]
+                    ))
+                else:
+                    tool_results.append(result)
+                    successful_calls.append(allowed_conduct_research_calls[i])
 
             # Create tool messages with research results
-            for observation, tool_call in zip(tool_results, allowed_conduct_research_calls):
+            for observation, tool_call in zip(tool_results, successful_calls):
                 all_tool_messages.append(ToolMessage(
                     content=observation.get("compressed_research", "Error synthesizing research report: Maximum retries exceeded"),
                     name=tool_call["name"],
@@ -176,17 +207,63 @@ async def supervisor_tools(state: SupervisorState, config: RunnableConfig) -> Co
             if raw_notes_concat:
                 update_payload["raw_notes"] = [raw_notes_concat]
 
+            # Aggregate sources from all research results for verification
+            # With quality filtering, deduplication, and limit enforcement
+            max_sources = getattr(configurable, 'max_total_sources', 200)
+            min_content_len = getattr(configurable, 'min_source_content_length', 500)
+
+            existing_sources = state.get("source_store", [])
+            existing_urls = {s.get("url") for s in existing_sources if s.get("url")}
+
+            new_sources = []
+            skipped_low_quality = 0
+            for observation in tool_results:
+                for source in observation.get("source_store", []):
+                    url = source.get("url")
+                    content = source.get("content", "") or ""
+
+                    # Skip duplicates
+                    if not url or url in existing_urls:
+                        continue
+
+                    # Quality filter: skip sources with insufficient content
+                    if len(content) < min_content_len:
+                        skipped_low_quality += 1
+                        continue
+
+                    new_sources.append(source)
+                    existing_urls.add(url)
+
+            if skipped_low_quality > 0:
+                print(f"[SUPERVISOR] Filtered {skipped_low_quality} low-quality sources (<{min_content_len} chars)")
+
+            # Enforce limit - stop adding when we hit max
+            slots_remaining = max(0, max_sources - len(existing_sources))
+            if slots_remaining < len(new_sources):
+                print(f"[SUPERVISOR] Source limit reached ({max_sources}), dropping {len(new_sources) - slots_remaining} sources")
+            new_sources = new_sources[:slots_remaining]
+
+            if new_sources:
+                update_payload["source_store"] = existing_sources + new_sources
+                print(f"[SUPERVISOR] Sources: {len(existing_sources)} existing + {len(new_sources)} new = {len(existing_sources) + len(new_sources)} total")
+
         except Exception as e:
             # Handle research execution errors
-            if is_token_limit_exceeded(e, configurable.research_model) or True:
-                # Token limit exceeded or other error - end research phase
+            print(f"[SUPERVISOR] Research execution error: {e}")
+
+            # BUG FIX: Removed `or True` - only end on token limit, not all errors
+            if is_token_limit_exceeded(e, configurable.research_model):
+                print("[SUPERVISOR] Token limit exceeded, ending research phase")
                 return Command(
                     goto=END,
                     update={
                         "notes": get_notes_from_tool_calls(supervisor_messages),
-                        "research_brief": state.get("research_brief", "")
+                        "research_brief": state.get("research_brief", ""),
+                        "source_store": state.get("source_store", []),
                     }
                 )
+            # For other errors, log and continue (don't crash the whole pipeline)
+            print(f"[SUPERVISOR] Non-fatal error, continuing with partial results")
 
     # Step 3: Return command with all tool results
     update_payload["supervisor_messages"] = all_tool_messages

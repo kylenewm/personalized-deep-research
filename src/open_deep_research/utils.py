@@ -41,27 +41,66 @@ from open_deep_research.state import ResearchComplete, Summary, SourceRecord, Br
 # Source Storage Utils
 ##########################
 
+# Module-level cache for sources when external Store is unavailable
+# This allows Extract API sources to propagate through state locally
+_source_cache: Dict[str, List[dict]] = {}
+
+
 def get_source_store_key(config: RunnableConfig) -> str:
     """Generate unique key for source storage per thread."""
     thread_id = config.get("configurable", {}).get("thread_id", "default")
     return f"verification_sources_{thread_id}"
 
 
+def cache_sources(sources: List[dict], config: RunnableConfig) -> None:
+    """Cache sources locally for retrieval by researcher nodes.
+
+    This is used when LangGraph Store is unavailable (local development).
+    """
+    key = get_source_store_key(config)
+    if key not in _source_cache:
+        _source_cache[key] = []
+
+    # Dedupe by URL
+    existing_urls = {s.get("url") for s in _source_cache[key]}
+    for source in sources:
+        if source.get("url") not in existing_urls:
+            _source_cache[key].append(source)
+            existing_urls.add(source.get("url"))
+
+    logging.info(f"[SOURCES] Cached {len(sources)} sources locally (total: {len(_source_cache[key])})")
+
+
+def get_cached_sources(config: RunnableConfig) -> List[dict]:
+    """Retrieve cached sources for this thread."""
+    key = get_source_store_key(config)
+    return _source_cache.get(key, [])
+
+
 async def store_source_records(
-    records: List[dict], 
+    records: List[dict],
     config: RunnableConfig,
     max_content_length: int = 50000
 ) -> None:
     """Store source records in LangGraph store for later verification.
-    
+
     Args:
         records: List of source record dicts with url, title, content, query
         config: Runtime config containing thread_id
         max_content_length: Max chars to store per source (default 50k)
     """
+    # Truncate content before caching
+    for record in records:
+        record["content"] = record.get("content", "")[:max_content_length]
+        if "timestamp" not in record:
+            record["timestamp"] = datetime.now().isoformat()
+
+    # Always cache locally (for local development without external Store)
+    cache_sources(records, config)
+
     store = get_store()
     if store is None:
-        logging.warning("[SOURCES] No store available, skipping source storage")
+        logging.warning("[SOURCES] No store available, using local cache only")
         return
     
     key = get_source_store_key(config)
@@ -91,7 +130,16 @@ async def store_source_records(
 
 
 async def get_stored_sources(config: RunnableConfig) -> List[dict]:
-    """Retrieve all stored source records for this thread."""
+    """Retrieve all stored source records for this thread.
+
+    Checks local cache first (for local development), then falls back to external Store.
+    """
+    # Try local cache first (for local development without external Store)
+    cached = get_cached_sources(config)
+    if cached:
+        logging.info(f"[SOURCES] Using {len(cached)} cached sources")
+        return cached
+
     store = get_store()
     if store is None:
         logging.info("[SOURCES] No store available, returning empty list")
@@ -168,33 +216,59 @@ async def tavily_search(
     )
     
     # Step 4: Create summarization tasks (skip empty content)
+    # Use queries as research topic context for relevance filtering
+    research_topic = " | ".join(queries[:3])  # Combine first 3 queries as topic context
+
     async def noop():
         """No-op function for results without raw content."""
         return None
-    
+
     summarization_tasks = [
-        noop() if not result.get("raw_content") 
+        noop() if not result.get("raw_content")
         else summarize_webpage(
-            summarization_model, 
-            result['raw_content'][:max_char_to_include]
+            summarization_model,
+            result['raw_content'][:max_char_to_include],
+            research_topic
         )
         for result in unique_results.values()
     ]
     
     # Step 5: Execute all summarization tasks in parallel
-    summaries = await asyncio.gather(*summarization_tasks)
-    
-    # Step 6: Combine results with their summaries
+    # BUG FIX: Protect gather with return_exceptions=True
+    summaries_raw = await asyncio.gather(*summarization_tasks, return_exceptions=True)
+
+    # Handle exceptions - use original content as fallback
+    # Track skipped URLs (irrelevant content marked as SKIP)
+    summaries = []
+    skipped_urls = set()
+    url_list = list(unique_results.keys())
+
+    for i, summary in enumerate(summaries_raw):
+        if isinstance(summary, Exception):
+            print(f"[SEARCH] Summarization failed for result {i}: {summary}")
+            summaries.append(None)  # Will use original content
+        elif summary is None:
+            # Content was marked irrelevant (SKIP) - track for filtering
+            skipped_urls.add(url_list[i])
+            summaries.append(None)
+        else:
+            summaries.append(summary)
+
+    if skipped_urls:
+        print(f"[SEARCH] Filtered {len(skipped_urls)} irrelevant sources")
+
+    # Step 6: Combine results with their summaries (exclude skipped)
     summarized_results = {
         url: {
-            'title': result['title'], 
+            'title': result['title'],
             'content': result['content'] if summary is None else summary
         }
         for url, result, summary in zip(
-            unique_results.keys(), 
-            unique_results.values(), 
+            unique_results.keys(),
+            unique_results.values(),
             summaries
         )
+        if url not in skipped_urls  # Exclude irrelevant content
     }
     
     # Step 6.5: Store source records for verification (SIDE EFFECT)
@@ -218,7 +292,11 @@ async def tavily_search(
         extracted_by_url = {}
 
     # Build source records, preferring Extract API content when available
+    # Skip irrelevant sources that were marked as SKIP during summarization
     for url, result in unique_results.items():
+        if url in skipped_urls:
+            continue  # Skip irrelevant content
+
         if not (result.get("raw_content") or result.get("content")):
             continue
 
@@ -228,7 +306,6 @@ async def tavily_search(
                 "url": url,
                 "title": extracted_by_url[url].get("title") or result.get("title", ""),
                 "content": extracted_by_url[url]["content"],
-                "raw_content": result.get("raw_content", ""),  # Keep original for fallback
                 "query": result.get("query", ""),
                 "extraction_method": "extract_api"
             })
@@ -238,7 +315,6 @@ async def tavily_search(
                 "url": url,
                 "title": result.get("title", ""),
                 "content": result.get("raw_content") or result.get("content", ""),
-                "raw_content": result.get("raw_content", ""),
                 "query": result.get("query", ""),
                 "extraction_method": "search_raw"
             })
@@ -301,9 +377,19 @@ async def tavily_search_async(
         tavily_client.search(query, **search_params)
         for query in search_queries
     ]
-    
-    # Execute all search queries in parallel and return results
-    search_results = await asyncio.gather(*search_tasks)
+
+    # BUG FIX: Protect gather with return_exceptions=True
+    search_results_raw = await asyncio.gather(*search_tasks, return_exceptions=True)
+
+    # Filter out failed searches and log them
+    search_results = []
+    for i, result in enumerate(search_results_raw):
+        if isinstance(result, Exception):
+            print(f"[SEARCH] Search query {i} failed: {result}")
+            search_results.append({"results": []})  # Empty result
+        else:
+            search_results.append(result)
+
     return search_results
 
 
@@ -525,37 +611,44 @@ def format_brief_context(context: BriefContext, days: int = 90) -> str:
     )
 
 
-async def summarize_webpage(model: BaseChatModel, webpage_content: str) -> str:
+async def summarize_webpage(model: BaseChatModel, webpage_content: str, research_topic: str = "") -> str | None:
     """Summarize webpage content using AI model with timeout protection.
-    
+
     Args:
         model: The chat model configured for summarization
         webpage_content: Raw webpage content to be summarized
-        
+        research_topic: The research topic for relevance filtering
+
     Returns:
-        Formatted summary with key excerpts, or original content if summarization fails
+        Formatted summary with key excerpts, None if irrelevant/skipped, or original content if summarization fails
     """
     try:
-        # Create prompt with current date context
+        # Create prompt with current date context and research topic
         prompt_content = summarize_webpage_prompt.format(
-            webpage_content=webpage_content, 
-            date=get_today_str()
+            webpage_content=webpage_content,
+            date=get_today_str(),
+            research_topic=research_topic or "General research"
         )
-        
+
         # Execute summarization with timeout to prevent hanging
         summary = await asyncio.wait_for(
             model.ainvoke([HumanMessage(content=prompt_content)]),
             timeout=60.0  # 60 second timeout for summarization
         )
-        
+
+        # Check for SKIP response (irrelevant content)
+        if summary.summary.strip().upper() == "SKIP" or summary.key_excerpts.strip().upper() == "SKIP":
+            logging.info("Content marked as irrelevant/SKIP by summarization model")
+            return None
+
         # Format the summary with structured sections
         formatted_summary = (
             f"<summary>\n{summary.summary}\n</summary>\n\n"
             f"<key_excerpts>\n{summary.key_excerpts}\n</key_excerpts>"
         )
-        
+
         return formatted_summary
-        
+
     except asyncio.TimeoutError:
         # Timeout during summarization - return original content
         logging.warning("Summarization timed out after 60 seconds, returning original content")

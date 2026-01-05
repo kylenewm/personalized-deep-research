@@ -172,7 +172,7 @@ class AgentState(MessagesState):
     human_approved_brief: Optional[str] = None  # Human-edited brief (if modified)
     
     # Claim Verification fields
-    source_store: Annotated[list[SourceRecord], operator.add] = []  # Accumulated sources for verification
+    source_store: Annotated[list[SourceRecord], override_reducer] = []  # Accumulated sources for verification
     verification_result: Optional[VerificationResult] = None  # Final verification output
 
     # Trust Store Gating (S02)
@@ -184,24 +184,27 @@ class AgentState(MessagesState):
 
 class SupervisorState(TypedDict):
     """State for the supervisor that manages research tasks."""
-    
+
     supervisor_messages: Annotated[list[MessageLikeRepresentation], override_reducer]
     research_brief: str
     notes: Annotated[list[str], override_reducer] = []
     research_iterations: int = 0
     raw_notes: Annotated[list[str], override_reducer] = []
+    source_store: Annotated[list[SourceRecord], override_reducer] = []  # Sources for verification
 
 class ResearcherState(TypedDict):
     """State for individual researchers conducting research."""
-    
+
     researcher_messages: Annotated[list[MessageLikeRepresentation], operator.add]
     tool_call_iterations: int = 0
     research_topic: str
     compressed_research: str
     raw_notes: Annotated[list[str], override_reducer] = []
+    source_store: list = []  # Sources collected during research
 
 class ResearcherOutputState(BaseModel):
     """Output state from individual researchers."""
-    
+
     compressed_research: str
     raw_notes: Annotated[list[str], override_reducer] = []
+    source_store: list = []  # Sources collected during research

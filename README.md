@@ -146,12 +146,32 @@ cp .env.example .env
 ## Usage
 
 ```bash
-# Run a research query
+# Full pipeline test (~8 min)
 python scripts/test_e2e_quick.py "What is quantum computing?"
 
-# Test verification logic with mock data
+# Test verification logic with mock data (~10s)
 python scripts/mock_verification_test.py
 ```
+
+## Staged Testing
+
+Test each pipeline stage independently for faster iteration:
+
+```bash
+# Test brief generation only (~30s)
+python scripts/test_brief.py "What are the latest AI models?"
+
+# Test research phase (~2-3 min)
+python scripts/test_research.py "What is quantum computing?"
+
+# Test report generation with mock data (~30s)
+python scripts/test_report.py --mock
+
+# Test report from saved research state
+python scripts/test_report.py --state test_research_state.json
+```
+
+Each staged test outputs a detailed markdown report showing exactly what happened.
 
 ## Configuration
 
@@ -185,8 +205,12 @@ src/open_deep_research/
     └── sanitize.py             # HTML cleaning
 
 scripts/
-├── test_e2e_quick.py           # Quick end-to-end test
+├── test_e2e_quick.py           # Full pipeline test (~8 min)
+├── test_brief.py               # Test brief generation (~30s)
+├── test_research.py            # Test research phase (~2-3 min)
+├── test_report.py              # Test report generation (~30s)
 ├── mock_verification_test.py   # Test verification with mock data
+├── staged_config.py            # Shared minimal config for staged tests
 └── generate_run_report.py      # Generate analysis from run state
 ```
 
@@ -195,3 +219,35 @@ scripts/
 After each run, you get:
 - `run_report_<timestamp>.md` - Human-readable analysis of what happened
 - `run_state_<timestamp>.json` - Raw state for debugging
+- `metrics/metrics_<timestamp>.json` - Structured metrics (from staged tests)
+
+## Metrics System
+
+The staged tests output structured JSON metrics for each run:
+
+```json
+{
+  "run_id": "20260104_192816",
+  "query": "What are AI agents?",
+  "total_duration_seconds": 138.1,
+  "stages": [
+    {"name": "full_pipeline", "duration_seconds": 138.1, "success": true}
+  ],
+  "sources_stored": 25,
+  "notes_generated": 0,
+  "report_length_chars": 16298,
+  "snippets_extracted": 100,
+  "snippets_verified_pass": 45
+}
+```
+
+Use metrics to track optimization progress across runs.
+
+## Documentation
+
+- **[ARCHITECTURE.md](./ARCHITECTURE.md)** - Complete technical breakdown of the system
+  - All pipeline stages explained in detail
+  - Data flow diagrams
+  - State management
+  - Anti-hallucination system
+  - Key files reference

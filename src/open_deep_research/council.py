@@ -293,8 +293,22 @@ async def council_vote_on_brief(
         get_single_vote(model, brief, runnable_config)
         for model in config.models
     ]
-    votes = await asyncio.gather(*vote_tasks)
-    
+    # BUG FIX: Protect gather with return_exceptions=True
+    votes_raw = await asyncio.gather(*vote_tasks, return_exceptions=True)
+
+    # Filter out failed votes
+    votes = []
+    for i, vote in enumerate(votes_raw):
+        if isinstance(vote, Exception):
+            print(f"[COUNCIL] Vote from model {config.models[i]} failed: {vote}")
+        else:
+            votes.append(vote)
+
+    # If all votes failed, return a default "approve" to not block pipeline
+    if not votes:
+        print("[COUNCIL] All votes failed, defaulting to approve")
+        return CouncilVerdict(decision="approve", confidence=0.5, synthesized_feedback="Council unavailable")
+
     # Calculate collective verdict
     verdict = calculate_verdict(list(votes), config)
     

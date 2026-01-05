@@ -365,11 +365,24 @@ Be thorough but fair. Minor formatting issues are not grounds for rejection. Foc
 
 summarize_webpage_prompt = """You are tasked with summarizing the raw content of a webpage retrieved from a web search. Your goal is to create a summary that preserves the most important information from the original web page. This summary will be used by a downstream research agent, so it's crucial to maintain the key details without losing essential information.
 
+RESEARCH TOPIC: {research_topic}
+
 Here is the raw content of the webpage:
 
 <webpage_content>
 {webpage_content}
 </webpage_content>
+
+RELEVANCE CHECK (do this first):
+Evaluate if this webpage contains substantive information relevant to the research topic above.
+Return "SKIP" for both summary and key_excerpts if ANY of these are true:
+- Content is mostly navigation, ads, or boilerplate (cookie notices, login prompts, etc.)
+- Content is a paywall message, error page, or access denied page
+- Content has no meaningful information related to the research topic
+- Content is too short or fragmented to be useful (just titles/headers with no substance)
+- Content is primarily about a different, unrelated topic
+
+If the content IS relevant and substantive, proceed with the summary guidelines below.
 
 Please follow these guidelines to create your summary:
 

@@ -1,4 +1,25 @@
-"""Configuration management for the Open Deep Research system."""
+"""Configuration management for the Open Deep Research system.
+
+Feature Status:
+    ✓ ACTIVE: Core research pipeline (search → summarize → report)
+    ✓ ACTIVE: Quote verification (S03/S04) - extracts and verifies quotes from sources
+    ✓ ACTIVE: Presets (fast/balanced/thorough)
+
+    ⏸ DISABLED BY DEFAULT: Council validation (use_council=False)
+        - Multi-model consensus for research briefs/findings
+        - Enable with: use_council=True
+        - Cost: ~$0.08-0.16 per run (additional)
+
+    ⏸ DISABLED BY DEFAULT: Brief context pre-search (enable_brief_context=False)
+        - Searches for context before generating research brief
+        - Enable with: enable_brief_context=True
+        - Cost: ~$0.02 per run (additional)
+
+    ⏸ DISABLED BY DEFAULT: Claims verification (use_claim_verification=False)
+        - Post-report embedding-based claim checking
+        - Enable with: use_claim_verification=True
+        - Cost: ~$0.45 per run (additional)
+"""
 
 import os
 from enum import Enum
@@ -161,14 +182,38 @@ class Configuration(BaseModel):
         }
     )
     max_content_length: int = Field(
-        default=50000,
+        default=15000,
         metadata={
             "x_oap_ui_config": {
                 "type": "number",
-                "default": 50000,
+                "default": 15000,
                 "min": 1000,
                 "max": 200000,
-                "description": "Maximum character length for webpage content before summarization"
+                "description": "Maximum character length for webpage content. 15K is sufficient for quote extraction."
+            }
+        }
+    )
+    max_total_sources: int = Field(
+        default=200,
+        metadata={
+            "x_oap_ui_config": {
+                "type": "number",
+                "default": 200,
+                "min": 10,
+                "max": 500,
+                "description": "Maximum total sources to collect. Prevents token explosion on long research runs."
+            }
+        }
+    )
+    min_source_content_length: int = Field(
+        default=500,
+        metadata={
+            "x_oap_ui_config": {
+                "type": "number",
+                "default": 500,
+                "min": 100,
+                "max": 2000,
+                "description": "Minimum content length to keep a source. Filters out low-quality/empty sources."
             }
         }
     )
@@ -255,13 +300,14 @@ class Configuration(BaseModel):
     )
     
     # Council Configuration - Multi-model verification for research briefs
+    # CHANGED: Off by default for cost savings (~$0.08/run)
     use_council: bool = Field(
-        default=True,
+        default=False,
         metadata={
             "x_oap_ui_config": {
                 "type": "boolean",
-                "default": True,
-                "description": "Enable multi-model council verification for research briefs before execution"
+                "default": False,
+                "description": "Enable multi-model council verification for research briefs before execution. Adds ~$0.08/run."
             }
         }
     )
@@ -303,13 +349,14 @@ class Configuration(BaseModel):
     )
     
     # Council 2: Fact-check findings after research
+    # CHANGED: Off by default for cost savings (~$0.08/run)
     use_findings_council: bool = Field(
-        default=True,
+        default=False,
         metadata={
             "x_oap_ui_config": {
                 "type": "boolean",
-                "default": True,
-                "description": "Enable council fact-checking of research findings before final report. Catches hallucinations and fabrications."
+                "default": False,
+                "description": "Enable council fact-checking of research findings before final report. Adds ~$0.08/run."
             }
         }
     )
@@ -346,13 +393,14 @@ class Configuration(BaseModel):
     
     # Brief Context Injection Configuration
     # Pre-searches to inject recent context into brief generation
+    # CHANGED: Off by default for cost savings (~$0.015/run) and speed
     enable_brief_context: bool = Field(
-        default=True,
+        default=False,
         metadata={
             "x_oap_ui_config": {
                 "type": "boolean",
-                "default": True,
-                "description": "Enable Tavily pre-search to inject recent context into brief generation. Improves brief specificity."
+                "default": False,
+                "description": "Enable Tavily pre-search to inject recent context into brief generation. Adds ~$0.015/run and 10-15 seconds."
             }
         }
     )
@@ -446,6 +494,53 @@ class Configuration(BaseModel):
         }
     )
 
+    # Preset Configuration - Easy mode selection
+    preset: Optional[str] = Field(
+        default=None,
+        metadata={
+            "x_oap_ui_config": {
+                "type": "select",
+                "default": None,
+                "description": "Quick preset that overrides other settings. 'fast' (~$0.15), 'balanced' (~$0.25), 'thorough' (~$0.50)",
+                "options": [
+                    {"label": "None (use individual settings)", "value": None},
+                    {"label": "Fast (~$0.15/run, no extras)", "value": "fast"},
+                    {"label": "Balanced (~$0.25/run, with context)", "value": "balanced"},
+                    {"label": "Thorough (~$0.50/run, all features)", "value": "thorough"}
+                ]
+            }
+        }
+    )
+
+    def apply_preset(self) -> "Configuration":
+        """Apply preset configuration overrides.
+
+        Returns self for chaining.
+
+        Presets:
+        - fast: No councils, no brief context, minimal iterations (~$0.15/run)
+        - balanced: Brief context enabled, no councils (~$0.25/run)
+        - thorough: All features enabled (~$0.50/run)
+        """
+        if self.preset == "fast":
+            self.use_council = False
+            self.use_findings_council = False
+            self.enable_brief_context = False
+            self.use_claim_verification = False
+            self.max_researcher_iterations = 3
+            self.max_react_tool_calls = 5
+        elif self.preset == "balanced":
+            self.use_council = False
+            self.use_findings_council = False
+            self.enable_brief_context = True
+            self.use_claim_verification = False
+        elif self.preset == "thorough":
+            self.use_council = True
+            self.use_findings_council = True
+            self.enable_brief_context = True
+            self.use_claim_verification = False  # Still too expensive
+        return self
+
     @classmethod
     def from_runnable_config(
         cls, config: Optional[RunnableConfig] = None
@@ -457,7 +552,13 @@ class Configuration(BaseModel):
             field_name: os.environ.get(field_name.upper(), configurable.get(field_name))
             for field_name in field_names
         }
-        return cls(**{k: v for k, v in values.items() if v is not None})
+        instance = cls(**{k: v for k, v in values.items() if v is not None})
+
+        # Apply preset if one is set
+        if instance.preset:
+            instance.apply_preset()
+
+        return instance
 
     def get_effective_max_researcher_iterations(self) -> int:
         """Get max researcher iterations, reduced in test mode."""

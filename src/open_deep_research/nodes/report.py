@@ -187,6 +187,7 @@ async def final_report_generation(state: AgentState, config: RunnableConfig):
     cleared_state = {
         "notes": {"type": "override", "value": []},
         "evidence_snippets": {"type": "override", "value": []},
+        "source_store": {"type": "override", "value": []},  # Clear sources after report - no longer needed
     }
     findings = "\n".join(notes)
 
