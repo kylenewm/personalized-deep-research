@@ -479,7 +479,7 @@ class Configuration(BaseModel):
             }
         }
     )
-    
+
     verification_confidence_threshold: float = Field(
         default=0.8,
         metadata={
@@ -490,6 +490,29 @@ class Configuration(BaseModel):
                 "max": 1.0,
                 "step": 0.1,
                 "description": "Claims below this confidence are flagged as warnings."
+            }
+        }
+    )
+
+    # Evaluation Framework Configuration
+    # Post-hoc evaluation of report quality (separate from pipeline)
+    run_evaluation: bool = Field(
+        default=False,
+        metadata={
+            "x_oap_ui_config": {
+                "type": "boolean",
+                "default": False,
+                "description": "Run evaluation framework after report generation. Produces structured metrics JSON. Adds ~$0.30/eval."
+            }
+        }
+    )
+    evaluation_model: str = Field(
+        default="openai:gpt-4.1-mini",
+        metadata={
+            "x_oap_ui_config": {
+                "type": "text",
+                "default": "openai:gpt-4.1-mini",
+                "description": "Model for evaluation claim extraction and verification. Use smaller model for cost savings."
             }
         }
     )

@@ -182,6 +182,9 @@ class AgentState(MessagesState):
     # Evidence Extraction (S03)
     evidence_snippets: Annotated[list[EvidenceSnippet], override_reducer] = []  # Extracted candidate quotes
 
+    # Evaluation Framework (optional, run_evaluation config)
+    eval_result: Optional[dict] = None  # Evaluation metrics if run_evaluation=True
+
 class SupervisorState(TypedDict):
     """State for the supervisor that manages research tasks."""
 

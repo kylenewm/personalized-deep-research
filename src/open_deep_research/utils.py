@@ -293,6 +293,9 @@ async def tavily_search(
 
     # Build source records, preferring Extract API content when available
     # Skip irrelevant sources that were marked as SKIP during summarization
+    MIN_CONTENT_LENGTH = 500  # Flag sources with less content as potentially truncated
+    truncated_urls = []
+
     for url, result in unique_results.items():
         if url in skipped_urls:
             continue  # Skip irrelevant content
@@ -302,22 +305,53 @@ async def tavily_search(
 
         if url in extracted_by_url and extracted_by_url[url].get("content"):
             # Use Extract API content (cleaner)
+            content = extracted_by_url[url]["content"]
             source_records_to_store.append({
                 "url": url,
                 "title": extracted_by_url[url].get("title") or result.get("title", ""),
-                "content": extracted_by_url[url]["content"],
+                "content": content,
                 "query": result.get("query", ""),
                 "extraction_method": "extract_api"
             })
+            if len(content) < MIN_CONTENT_LENGTH:
+                truncated_urls.append(url)
         else:
             # Fall back to raw search content
+            content = result.get("raw_content") or result.get("content", "")
             source_records_to_store.append({
                 "url": url,
                 "title": result.get("title", ""),
-                "content": result.get("raw_content") or result.get("content", ""),
+                "content": content,
                 "query": result.get("query", ""),
                 "extraction_method": "search_raw"
             })
+            if len(content) < MIN_CONTENT_LENGTH:
+                truncated_urls.append(url)
+
+    # Attempt to refetch truncated sources via Extract API if not already tried
+    if truncated_urls and config and not use_extract:
+        logging.info(f"[SOURCES] {len(truncated_urls)} sources have <{MIN_CONTENT_LENGTH} chars, attempting Extract API refetch")
+        try:
+            refetched = await tavily_extract(truncated_urls, config)
+            refetched_by_url = {item["url"]: item for item in refetched}
+
+            # Update source records with refetched content
+            for i, record in enumerate(source_records_to_store):
+                if record["url"] in refetched_by_url:
+                    new_content = refetched_by_url[record["url"]].get("content", "")
+                    if len(new_content) > len(record["content"]):
+                        source_records_to_store[i]["content"] = new_content
+                        source_records_to_store[i]["extraction_method"] = "extract_api_refetch"
+                        logging.info(f"[SOURCES] Refetched {record['url'][:50]}... ({len(record['content'])} -> {len(new_content)} chars)")
+        except Exception as e:
+            logging.warning(f"[SOURCES] Extract API refetch failed: {e}")
+
+    # Log warning for any remaining truncated sources
+    still_truncated = [r for r in source_records_to_store if len(r.get("content", "")) < MIN_CONTENT_LENGTH]
+    if still_truncated:
+        logging.warning(f"[SOURCES] {len(still_truncated)} sources still have <{MIN_CONTENT_LENGTH} chars (may be paywalled/JS-heavy):")
+        for r in still_truncated[:5]:  # Log first 5
+            logging.warning(f"[SOURCES]   - {r['url'][:60]}... ({len(r.get('content', ''))} chars)")
 
     # Store asynchronously (fire and forget, don't block tool response)
     if source_records_to_store and config:

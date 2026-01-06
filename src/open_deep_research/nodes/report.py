@@ -218,15 +218,19 @@ async def final_report_generation(state: AgentState, config: RunnableConfig):
     """
     # Step 1: Extract research findings and prepare state cleanup
     notes = state.get("notes", [])
+    configurable = Configuration.from_runnable_config(config)
+
+    # Don't clear source_store if evaluation is enabled (eval needs sources)
     cleared_state = {
         "notes": {"type": "override", "value": []},
         "evidence_snippets": {"type": "override", "value": []},
-        "source_store": {"type": "override", "value": []},  # Clear sources after report - no longer needed
     }
+    if not configurable.run_evaluation:
+        cleared_state["source_store"] = {"type": "override", "value": []}  # Clear sources after report
+
     findings = "\n".join(notes)
 
     # Step 2: Configure the final report generation model
-    configurable = Configuration.from_runnable_config(config)
     writer_model_config = {
         "model": configurable.final_report_model,
         "max_tokens": configurable.final_report_model_max_tokens,

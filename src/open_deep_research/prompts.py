@@ -194,14 +194,25 @@ Only these fully comprehensive cleaned findings are going to be returned to the 
 </Task>
 
 <CRITICAL GROUNDING RULES - PREVENT HALLUCINATION>
-You may ONLY include information that appears in the search results and tool outputs above.
+You may ONLY include information that appears EXPLICITLY in the search results and tool outputs above.
+
+VERIFICATION CHECKLIST (apply to EVERY claim):
+□ Does this exact fact appear in a source? If NO → DO NOT INCLUDE
+□ Can I point to the specific source and quote? If NO → DO NOT INCLUDE
+□ Am I synthesizing across sources to create a new claim? If YES → DO NOT INCLUDE
+
+STRICT RULES:
 - DO NOT invent, fabricate, or extrapolate any facts, names, statistics, dates, or claims.
-- DO NOT include information from your training data that is not present in the search results.
-- If a product, model, paper, company, or fact is NOT in the search results, DO NOT mention it.
-- If you cannot find enough information, write "Insufficient data found for [topic]" rather than inventing.
+- DO NOT include information from your training data - only what is in the search results.
+- DO NOT synthesize information from multiple sources to create combined claims not in any single source.
+- If a product, model, paper, or statistic is NOT in the search results, DO NOT mention it.
 - Every single claim MUST have a citation [#] that maps to an actual search result URL.
-- If you are unsure whether something is in the search results, DO NOT include it.
-- Double-check: Does this claim appear verbatim or clearly stated in one of the sources? If not, remove it.
+- The cited source MUST actually contain the claimed information.
+
+WHEN IN DOUBT, LEAVE IT OUT:
+- If you cannot find the EXACT information in a source, do not include it.
+- Better to have fewer claims that are verified than many unverifiable claims.
+- Write "Insufficient data found for [topic]" rather than inventing.
 </CRITICAL GROUNDING RULES>
 
 <Guidelines>
@@ -259,14 +270,32 @@ Here are the findings from the research that you conducted:
 
 <CRITICAL GROUNDING RULES - PREVENT HALLUCINATION>
 You have NO prior knowledge. You may ONLY use information from the Findings section above.
+
+BEFORE WRITING ANY CLAIM, ASK YOURSELF:
+1. Does this EXACT information appear in the Findings? → If NO, don't write it
+2. Can I cite the specific source number for this? → If NO, don't write it
+3. Am I paraphrasing beyond what the source says? → If YES, stick to source wording
+4. Am I combining info from multiple sources into a new claim? → If YES, don't do it
+
+ABSOLUTE PROHIBITIONS:
 - DO NOT invent, fabricate, or extrapolate any facts, names, statistics, dates, or claims.
 - DO NOT add information from your training data - only use what is in the Findings.
-- If something is NOT in the Findings, it DOES NOT EXIST for the purpose of this report.
-- Check dates: Today is {date}. Do NOT include future events or products "released" after today.
-- Every factual claim MUST have a citation [#] that maps to a source in the Findings.
-- If the Findings are insufficient to fully answer the question, explicitly state what is missing.
-- If you mention a product, model, paper, or statistic, verify it appears in the Findings first.
+- DO NOT make claims that sound plausible but aren't explicitly in the Findings.
+- DO NOT synthesize across sources to create combined claims not stated in any single source.
+- DO NOT assign a citation to a claim unless that source actually contains that information.
+
+DATE CHECK: Today is {date}.
+- Do NOT include future events or products "released" after today.
 - NEVER write "released in [future year]" or mention events that haven't happened yet.
+
+CITATION INTEGRITY:
+- Every factual claim MUST have a citation [#] that maps to a source in the Findings.
+- The cited source MUST actually contain the information you're citing it for.
+- If the Findings are insufficient, explicitly state what is missing.
+
+WHEN IN DOUBT:
+- Omit the claim entirely rather than risk inaccuracy.
+- It's better to have a shorter, accurate report than a longer, unverifiable one.
 </CRITICAL GROUNDING RULES>
 
 Please create a detailed answer to the overall research brief that:

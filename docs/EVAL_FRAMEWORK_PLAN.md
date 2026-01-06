@@ -228,12 +228,121 @@ python scripts/run_eval.py --thread-id abc123 --output eval.json
 
 ## Success Criteria
 
-- [ ] `evaluation.py` with `evaluate_report()` function
-- [ ] Tri-label claim verification (TRUE/FALSE/UNVERIFIABLE)
-- [ ] Structured JSON output with claims/citations/VF metrics
-- [ ] Standalone script `run_eval.py`
-- [ ] Optional integration via `run_evaluation: true`
-- [ ] Test on the 3 research reports we just ran
+- [x] `evaluation.py` with `evaluate_report()` function
+- [x] Tri-label claim verification (TRUE/FALSE/UNVERIFIABLE)
+- [x] Structured JSON output with claims/citations/VF metrics
+- [x] Standalone script `run_eval.py`
+- [x] Optional integration via `run_evaluation: true` config flag
+- [x] Test on research reports
+
+---
+
+## Implementation Status (Jan 5, 2026)
+
+### Completed
+
+**Files created/modified:**
+- `src/open_deep_research/evaluation.py` - Citation-first evaluation framework
+- `src/open_deep_research/configuration.py` - Added `run_evaluation` and `evaluation_model` config flags
+- `scripts/run_eval.py` - Standalone evaluation script
+
+**Key design: CITATION-FIRST APPROACH**
+
+Instead of expensive embedding search for all claims, we:
+1. Parse the Sources section to get `citation_num -> URL` mapping
+2. For claims WITH citations `[N]`, verify against the cited source directly
+3. For UNCITED claims, flag as high-risk and use embedding fallback
+4. Parallelize verification in batches of 5
+
+This is faster, cheaper, and more accurate than blind embedding search.
+
+**Features:**
+- `--dry-run` flag shows cost estimate before running
+- Parallel verification (batch size configurable)
+- Cost tracking (~$0.15-0.20 per eval with gpt-4.1-mini)
+- Structured JSON output with per-claim details
+
+### Test Results (AI Safety Report)
+
+**Final results after bug fixes:**
+
+```
+Report: 19884 chars | Sources: 141 | Claims: 30
+
+CLAIMS:
+  TRUE: 19 (63% grounding)
+  FALSE: 10 (33% hallucination)
+  UNVERIFIABLE: 1
+  UNCITED: 0
+
+QUALITY TARGETS:
+  Hallucination <2%: 33% [FAIL]
+  Grounding >85%: 63% [FAIL]
+  Citation >90%: 63% [FAIL]
+
+Cost: ~$0.16
+```
+
+### Bug Fixes Applied
+
+1. **Citation extraction** - Now finds citations by matching claim keywords to paragraphs
+2. **Citation parsing** - Fixed regex to handle titles with colons (e.g., "From Labs to Policy: IMDA's Journey")
+3. **Sources section exclusion** - Prevents false matches in Sources section
+
+### Analysis of Results
+
+The 33% hallucination rate reveals significant issues:
+
+**Example FALSE claims:**
+- c005: Claims about "AEF-1 standardization" not found in cited sources
+- c007: Claims about "agent performance vs human benchmarks" not supported
+- c015: Claims about "attribution graphs, confession mechanisms" not in sources
+
+**Root causes:**
+1. **Synthesis beyond sources** - Report synthesizes/interprets information not explicitly stated
+2. **Citation misattribution** - Some claims cite wrong source numbers
+3. **Incomplete source content** - source_store may have truncated content
+
+### Actionable Next Steps
+
+1. **Improve report generation prompts** - Enforce stricter grounding to cited sources ✅ DONE
+2. **Citation verification during generation** - Check citations before including
+3. **Investigate source content quality** - Ensure full content in source_store ✅ DONE (see below)
+
+---
+
+## Prompt Improvements (Jan 5, 2026)
+
+Updated `src/open_deep_research/prompts.py` with stronger grounding rules:
+
+### Changes to `compress_research_system_prompt`:
+- Added **VERIFICATION CHECKLIST** that must be applied to every claim
+- Added explicit anti-synthesis rule: "DO NOT synthesize information from multiple sources"
+- Added "WHEN IN DOUBT, LEAVE IT OUT" principle
+- Added requirement: "The cited source MUST actually contain the claimed information"
+
+### Changes to `final_report_generation_prompt`:
+- Added **BEFORE WRITING ANY CLAIM, ASK YOURSELF** checklist
+- Strengthened anti-synthesis rule
+- Added: "DO NOT assign a citation to a claim unless that source actually contains that information"
+- Added: "It's better to have a shorter, accurate report than a longer, unverifiable one"
+
+---
+
+## Source Truncation Issue (Jan 5, 2026)
+
+**Problem**: 20/141 sources (14%) have <300 characters - severely truncated.
+
+**Examples of truncated sources:**
+- `ari.us/policy-bytes/...` - 223 chars (should be ~3000+)
+- `euronews.com/...` - 219 chars
+- Various government docs - ~220-245 chars
+
+**Impact**: Claims citing these sources cannot be verified, leading to FALSE ratings.
+
+**Root cause**: Likely in Tavily search results or content summarization step.
+
+**Next step**: Investigate `tavily_search` and `summarize_webpage_prompt` to ensure full content capture
 
 ---
 

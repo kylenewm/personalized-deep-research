@@ -1,28 +1,32 @@
 """
 Evaluation framework for Deep Research reports.
 
-Provides claim-level verification, citation checking, and quality metrics.
-This is a SEPARATE module from the pipeline - runs after report generation.
+CITATION-FIRST APPROACH:
+- For claims WITH citations [N], verify against the cited source directly (fast, accurate)
+- For claims with MULTIPLE citations [1][2], verify against ALL cited sources
+- For UNCITED claims, flag as high-risk and use embedding search (fallback)
 
-Key design decisions:
-- Eval is separate from report generation (not embedded)
-- Reuses existing verification.py for claim extraction and verification
-- Produces structured JSON output for analysis
-- I9: Eval-driven changes require human checkpoint
+This is SEPARATE from the pipeline - runs as post-hoc quality check.
+
+Quality Targets:
+- Hallucination rate: <2%
+- Grounding rate: >85%
+- Citation accuracy: >90%
 """
 
+import asyncio
 import json
 import logging
 import re
-from dataclasses import dataclass, field, asdict
+from dataclasses import dataclass, asdict
 from datetime import datetime
-from typing import List, Dict, Optional, Any
+from typing import List, Dict, Optional, Tuple
 
 from langchain.chat_models import init_chat_model
 from langchain_core.runnables import RunnableConfig
 
 from open_deep_research.configuration import Configuration
-from open_deep_research.state import AgentState, SourceRecord, EvidenceSnippet
+from open_deep_research.state import SourceRecord
 from open_deep_research.utils import get_api_key_for_model
 from open_deep_research.verification import (
     extract_claims,
@@ -38,9 +42,11 @@ class EvalConfig:
     """Configuration for evaluation."""
     max_claims: int = 30
     model: str = "openai:gpt-4.1-mini"
-    top_k_sources: int = 3
     verify_citations: bool = True
     check_verified_findings: bool = True
+    dry_run: bool = False  # If True, only estimate cost without API calls
+    parallel_batch_size: int = 5  # Claims to verify in parallel
+    fallback_to_embedding: bool = True  # For uncited claims, search all sources
 
 
 @dataclass
@@ -48,12 +54,11 @@ class ClaimResult:
     """Result for a single claim verification."""
     claim_id: str
     claim_text: str
-    citation: Optional[str]  # e.g., "[9]"
-    priority: str  # "high", "medium", "low"
+    citations: List[int]  # e.g., [1, 3] for "[1][3]"
+    is_uncited: bool
     status: str  # "TRUE", "FALSE", "UNVERIFIABLE"
     confidence: float
-    source_url: Optional[str]
-    source_title: Optional[str]
+    sources_checked: List[str]  # URLs of sources checked
     evidence_snippet: Optional[str]
 
 
@@ -64,6 +69,7 @@ class ClaimMetrics:
     true_count: int = 0
     false_count: int = 0
     unverifiable_count: int = 0
+    uncited_count: int = 0  # High-risk: factual claims without citations
     hallucination_rate: float = 0.0
     grounding_rate: float = 0.0
 
@@ -72,7 +78,8 @@ class ClaimMetrics:
 class CitationMetrics:
     """Metrics for citation verification."""
     total: int = 0
-    verified: int = 0
+    valid: int = 0  # Citation points to existing source
+    supported: int = 0  # Cited source actually supports the claim
     accuracy: float = 0.0
     unique_sources: int = 0
 
@@ -87,6 +94,21 @@ class VerifiedFindingsMetrics:
 
 
 @dataclass
+class CostEstimate:
+    """Cost estimate for evaluation."""
+    extraction_calls: int = 1
+    verification_calls: int = 0
+    embedding_calls: int = 0
+    estimated_cost_usd: float = 0.0
+
+    def __str__(self):
+        return (f"Extraction: {self.extraction_calls} call (~$0.01)\n"
+                f"Verification: {self.verification_calls} calls (~${self.verification_calls * 0.01:.2f})\n"
+                f"Embedding: {self.embedding_calls} calls (~${self.embedding_calls * 0.001:.3f})\n"
+                f"TOTAL: ~${self.estimated_cost_usd:.2f}")
+
+
+@dataclass
 class EvalResult:
     """Complete evaluation result."""
     run_id: str
@@ -97,6 +119,7 @@ class EvalResult:
     verified_findings: VerifiedFindingsMetrics
     per_claim: List[ClaimResult]
     warnings: List[str]
+    cost_estimate: Optional[CostEstimate] = None
 
     def to_dict(self) -> dict:
         """Convert to dictionary for JSON serialization."""
@@ -109,6 +132,7 @@ class EvalResult:
             "verified_findings": asdict(self.verified_findings),
             "per_claim": [asdict(c) for c in self.per_claim],
             "warnings": self.warnings,
+            "cost_estimate": asdict(self.cost_estimate) if self.cost_estimate else None,
         }
 
     def to_json(self, path: str) -> None:
@@ -118,185 +142,277 @@ class EvalResult:
         print(f"[EVAL] Results saved to {path}")
 
 
-def extract_citations(report: str) -> List[Dict]:
-    """Extract all citations [N] from report with context.
+def parse_sources_section(report: str) -> Dict[int, Dict]:
+    """Parse the Sources section to build citation_num -> source info mapping.
 
-    Returns list of {"citation_num": int, "context": str, "position": int}
+    Expected format:
+    ## Sources
+    [1] Title, Author: https://example.com
+    [2] Another Title: https://example2.com
+
+    Handles titles with colons (e.g., "From Labs to Policy: IMDA's Journey")
+
+    Returns: {1: {"title": "...", "url": "..."}, 2: {...}}
     """
-    pattern = r'\[(\d+)\]'
-    citations = []
+    citation_map = {}
 
-    for match in re.finditer(pattern, report):
+    # Find Sources section
+    sources_match = re.search(r'## Sources\n(.*?)(?=\n## |\Z)', report, re.DOTALL)
+    if not sources_match:
+        return citation_map
+
+    sources_text = sources_match.group(1)
+
+    # Parse each citation line: [N] Title...: URL
+    # Use greedy match for title to handle titles with colons
+    # The pattern will match the LAST colon before https://
+    pattern = r'\[(\d+)\]\s*(.+):\s*(https?://[^\s\n]+)'
+    for match in re.finditer(pattern, sources_text):
         num = int(match.group(1))
-        # Get surrounding context (50 chars before)
-        start = max(0, match.start() - 50)
-        context = report[start:match.start()].strip()
-        citations.append({
-            "citation_num": num,
-            "context": context,
-            "position": match.start()
-        })
+        title = match.group(2).strip()
+        url = match.group(3).strip()
+        citation_map[num] = {"title": title, "url": url}
 
-    return citations
+    return citation_map
 
 
-def check_citations(report: str, sources: List[SourceRecord]) -> CitationMetrics:
-    """Verify citations reference valid sources.
+def extract_citations_from_claim(claim: str, report: str) -> List[int]:
+    """Extract citation numbers from a claim by finding it in the report.
 
-    Args:
-        report: The final report text
-        sources: List of source records
+    Strategy: Find the paragraph containing the claim, then extract citations
+    from that paragraph (citations often appear at end of paragraphs).
 
-    Returns:
-        CitationMetrics with verification results
+    Returns list of citation numbers, e.g., [1, 3] for "...fact [1][3]..."
     """
-    citations = extract_citations(report)
+    # Remove Sources section to avoid false matches
+    sources_idx = report.find('## Sources')
+    if sources_idx > 0:
+        report_body = report[:sources_idx]
+    else:
+        report_body = report
 
-    if not citations:
-        return CitationMetrics(total=0, verified=0, accuracy=1.0, unique_sources=0)
+    # Strategy 1: Find paragraph containing the claim
+    # Split by double newlines (paragraphs) or bullet points
+    paragraphs = re.split(r'\n\n+|\n-\s+', report_body)
 
-    # Build source index (1-indexed as they appear in Sources section)
-    # Note: This assumes sources are numbered in order in the report
-    num_sources = len(sources)
+    claim_lower = claim.lower()
+    claim_words = set(w.lower() for w in claim.split() if len(w) > 4)
 
-    verified = 0
-    for cit in citations:
-        # Citation is valid if it's within range of available sources
-        if 1 <= cit["citation_num"] <= num_sources:
-            verified += 1
+    for para in paragraphs:
+        para_lower = para.lower()
 
-    unique_cited = len(set(c["citation_num"] for c in citations))
+        # Check if this paragraph contains enough of the claim's key words
+        word_matches = sum(1 for w in claim_words if w in para_lower)
 
-    return CitationMetrics(
-        total=len(citations),
-        verified=verified,
-        accuracy=verified / len(citations) if citations else 1.0,
-        unique_sources=unique_cited
+        if word_matches >= min(5, len(claim_words) * 0.5):
+            # Found a matching paragraph - extract citations from it
+            citations = [int(m) for m in re.findall(r'\[(\d+)\]', para)]
+            if citations:
+                # Limit to reasonable number (paragraph shouldn't have >5 citations)
+                if len(citations) <= 5:
+                    return list(set(citations))
+
+    # Strategy 2: Exact substring match
+    if claim[:40] in report_body:
+        idx = report_body.find(claim[:40])
+        # Look for citations within 200 chars after the claim starts
+        region = report_body[idx:idx + 300]
+        citations = [int(m) for m in re.findall(r'\[(\d+)\]', region)]
+        if citations and len(citations) <= 5:
+            return list(set(citations))
+
+    return []
+
+
+def find_source_by_url(url: str, sources: List[SourceRecord]) -> Optional[SourceRecord]:
+    """Find a source in source_store by URL (fuzzy match)."""
+    url_clean = url.rstrip('/').lower()
+    for source in sources:
+        source_url = source.get("url", "").rstrip('/').lower()
+        if source_url == url_clean or url_clean in source_url or source_url in url_clean:
+            return source
+    return None
+
+
+def estimate_cost(num_claims: int, num_uncited: int, config: EvalConfig) -> CostEstimate:
+    """Estimate cost before running evaluation."""
+    # 1 extraction call
+    extraction_calls = 1
+
+    # Verification: 1 call per claim (cited claims check cited source, uncited use embedding)
+    verification_calls = num_claims
+
+    # Embedding calls only for uncited claims (if fallback enabled)
+    embedding_calls = num_uncited if config.fallback_to_embedding else 0
+
+    # Cost estimates (gpt-4.1-mini)
+    # Extraction: ~2k input + 1k output = ~$0.01
+    # Verification: ~1k input + 100 output = ~$0.005 each
+    # Embedding: ~$0.0001 per call
+    estimated_cost = 0.01 + (verification_calls * 0.005) + (embedding_calls * 0.001)
+
+    return CostEstimate(
+        extraction_calls=extraction_calls,
+        verification_calls=verification_calls,
+        embedding_calls=embedding_calls,
+        estimated_cost_usd=round(estimated_cost, 3)
     )
 
 
 def check_verified_findings(state: dict) -> VerifiedFindingsMetrics:
-    """Check Verified Findings section integrity.
-
-    Validates that:
-    - Section exists
-    - All quotes are from PASS snippets
-    - Source diversity is maintained
-    """
+    """Check Verified Findings section integrity."""
     report = state.get("final_report", "")
     snippets = state.get("evidence_snippets", [])
 
-    # Extract VF section
-    vf_match = re.search(
-        r'## Verified Findings\n(.*?)(?=\n## |\Z)',
-        report,
-        re.DOTALL
-    )
-
+    vf_match = re.search(r'## Verified Findings\n(.*?)(?=\n## |\Z)', report, re.DOTALL)
     if not vf_match:
-        return VerifiedFindingsMetrics(
-            quotes=0,
-            all_pass=False,
-            source_diversity=0,
-            error="Verified Findings section not found"
-        )
+        return VerifiedFindingsMetrics(quotes=0, all_pass=False, source_diversity=0,
+                                        error="Verified Findings section not found")
 
     vf_section = vf_match.group(1)
-
-    # Count quotes in section (look for quoted text)
     quotes = re.findall(r'"([^"]+)"', vf_section)
 
-    # Check all are PASS status
     pass_snippets = [s for s in snippets if s.get("status") == "PASS"]
     pass_quotes = {s["quote"] for s in pass_snippets}
 
-    # Fuzzy matching - quote might be slightly different
     all_pass = True
     for quote in quotes:
-        # Check if quote (or close version) exists in pass_quotes
-        found = False
-        for pq in pass_quotes:
-            if quote in pq or pq in quote:
-                found = True
-                break
-        if not found:
+        if not any(quote in pq or pq in quote for pq in pass_quotes):
             all_pass = False
             break
 
-    # Check source diversity
     sources_in_vf = set()
     for snippet in pass_snippets:
-        if snippet["quote"] in vf_section or any(q in snippet["quote"] for q in quotes):
-            sources_in_vf.add(snippet.get("url", snippet.get("source_id", "")))
+        if snippet["quote"] in vf_section:
+            sources_in_vf.add(snippet.get("url", ""))
 
     return VerifiedFindingsMetrics(
-        quotes=len(quotes),
-        all_pass=all_pass,
-        source_diversity=len(sources_in_vf)
+        quotes=len(quotes), all_pass=all_pass, source_diversity=len(sources_in_vf)
     )
-
-
-def prioritize_claim(claim: str, citation: Optional[str]) -> str:
-    """Assign priority to a claim for triage.
-
-    High priority:
-    - Claims with numbers/dates/percentages
-    - Uncited claims
-    - Claims with proper nouns
-    """
-    # Check for numbers, percentages, dates
-    has_numbers = bool(re.search(r'\d+(?:\.\d+)?%?', claim))
-    has_dollar = bool(re.search(r'\$[\d,]+', claim))
-    has_date = bool(re.search(r'\b(?:19|20)\d{2}\b', claim))
-
-    # Check for proper nouns (capitalized words not at start)
-    words = claim.split()
-    has_proper_nouns = any(
-        w[0].isupper() and i > 0
-        for i, w in enumerate(words)
-        if len(w) > 2
-    )
-
-    # Uncited claims are high priority
-    is_uncited = citation is None
-
-    if is_uncited or has_numbers or has_dollar or has_date:
-        return "high"
-    elif has_proper_nouns:
-        return "medium"
-    else:
-        return "low"
-
-
-def extract_claim_citation(claim: str, report: str) -> Optional[str]:
-    """Find the citation associated with a claim in the report."""
-    # Look for the claim text (or close match) and nearby citation
-    claim_start = report.find(claim[:50])  # First 50 chars
-    if claim_start == -1:
-        return None
-
-    # Look for citation within 20 chars after claim
-    search_region = report[claim_start:claim_start + len(claim) + 20]
-    citation_match = re.search(r'\[(\d+)\]', search_region)
-
-    if citation_match:
-        return f"[{citation_match.group(1)}]"
-    return None
 
 
 def map_verification_status(status: str) -> str:
-    """Map verification status to eval status.
-
-    Verification uses: SUPPORTED, PARTIALLY_SUPPORTED, UNSUPPORTED, UNCERTAIN
-    Eval uses: TRUE, FALSE, UNVERIFIABLE
-    """
+    """Map verification status to eval status."""
     mapping = {
         "SUPPORTED": "TRUE",
-        "PARTIALLY_SUPPORTED": "TRUE",  # Count as grounded
+        "PARTIALLY_SUPPORTED": "TRUE",
         "UNSUPPORTED": "FALSE",
         "UNCERTAIN": "UNVERIFIABLE",
     }
     return mapping.get(status, "UNVERIFIABLE")
+
+
+async def verify_claim_against_source(
+    claim: str,
+    source: SourceRecord,
+    llm,
+    claim_id: str
+) -> Tuple[str, float, str]:
+    """Verify a claim against a specific source.
+
+    Returns: (status, confidence, evidence_snippet)
+    """
+    content = source.get("content", "")
+    if not content:
+        return "UNVERIFIABLE", 0.0, "Source has no content"
+
+    # Extract best paragraph from source for this claim
+    claim_words = set(w.lower() for w in claim.split() if len(w) > 3)
+    paragraphs = content.split('\n\n')
+
+    best_para = ""
+    best_score = 0
+    for para in paragraphs:
+        if len(para) < 50:
+            continue
+        score = sum(1 for w in claim_words if w in para.lower())
+        if score > best_score:
+            best_score = score
+            best_para = para
+
+    passage = best_para[:1500] if best_para else content[:1500]
+
+    result = await verify_single_claim(claim, passage, source, llm, claim_id)
+    return (
+        result.get("status", "UNCERTAIN"),
+        result.get("confidence", 0.0),
+        result.get("evidence_snippet", "")
+    )
+
+
+async def verify_single_claim_task(
+    claim_text: str,
+    claim_id: str,
+    citations: List[int],
+    citation_map: Dict[int, Dict],
+    sources: List[SourceRecord],
+    llm,
+    config: EvalConfig
+) -> ClaimResult:
+    """Verify a single claim - citation-first approach.
+
+    If claim has citations: verify against cited sources
+    If uncited: flag as high-risk, optionally search all sources
+    """
+    is_uncited = len(citations) == 0
+    sources_checked = []
+    best_status = "UNVERIFIABLE"
+    best_confidence = 0.0
+    best_evidence = ""
+
+    if not is_uncited:
+        # CITATION-FIRST: Check the cited sources directly
+        for cit_num in citations:
+            if cit_num not in citation_map:
+                continue
+
+            cit_info = citation_map[cit_num]
+            source = find_source_by_url(cit_info["url"], sources)
+
+            if not source:
+                continue
+
+            sources_checked.append(cit_info["url"])
+            status, confidence, evidence = await verify_claim_against_source(
+                claim_text, source, llm, claim_id
+            )
+
+            # Keep best result (prefer SUPPORTED > PARTIAL > others)
+            if status == "SUPPORTED" and confidence > best_confidence:
+                best_status = status
+                best_confidence = confidence
+                best_evidence = evidence
+            elif best_status != "SUPPORTED" and confidence > best_confidence:
+                best_status = status
+                best_confidence = confidence
+                best_evidence = evidence
+
+    elif config.fallback_to_embedding:
+        # UNCITED: Use embedding search as fallback
+        try:
+            results = await find_relevant_passages(claim_text, sources, top_k=1)
+            if results:
+                source, passage, score = results[0]
+                sources_checked.append(source.get("url", ""))
+                status, confidence, evidence = await verify_claim_against_source(
+                    claim_text, source, llm, claim_id
+                )
+                best_status = status
+                best_confidence = confidence
+                best_evidence = evidence
+        except Exception as e:
+            logging.warning(f"[EVAL] Embedding search failed for {claim_id}: {e}")
+
+    return ClaimResult(
+        claim_id=claim_id,
+        claim_text=claim_text,
+        citations=citations,
+        is_uncited=is_uncited,
+        status=map_verification_status(best_status),
+        confidence=best_confidence,
+        sources_checked=sources_checked,
+        evidence_snippet=best_evidence[:200] if best_evidence else None
+    )
 
 
 async def evaluate_report(
@@ -304,70 +420,57 @@ async def evaluate_report(
     config: EvalConfig = None,
     runnable_config: RunnableConfig = None,
 ) -> EvalResult:
-    """Run full evaluation on a completed research report.
+    """Run evaluation on a completed research report.
 
-    This is the main entry point for evaluation.
-
-    Args:
-        state: Final agent state with final_report, source_store, evidence_snippets
-        config: Evaluation configuration
-        runnable_config: LangGraph runnable config for model initialization
-
-    Returns:
-        EvalResult with all metrics and per-claim details
+    CITATION-FIRST APPROACH:
+    1. Extract claims from report
+    2. For each claim, find its citations [N] in the report
+    3. Verify against the cited source(s) directly
+    4. For uncited claims, flag as high-risk
     """
     config = config or EvalConfig()
     warnings = []
 
-    # Extract key data from state
     report = state.get("final_report", "")
     sources = state.get("source_store", [])
-    query = ""
 
-    # Try to extract query from messages
+    # Extract query from messages
+    query = ""
     messages = state.get("messages", [])
-    if messages:
-        for msg in messages:
-            if hasattr(msg, 'content') and isinstance(msg.content, str):
-                if len(msg.content) < 500:  # Likely the query
-                    query = msg.content
-                    break
+    if messages and isinstance(messages, list) and len(messages) > 0:
+        first_msg = messages[0]
+        if isinstance(first_msg, dict):
+            query = first_msg.get("content", "")[:200]
+        elif hasattr(first_msg, 'content'):
+            query = str(first_msg.content)[:200]
 
     if not report:
-        warnings.append("No report found in state")
         return EvalResult(
             run_id=datetime.now().strftime("%Y%m%d_%H%M%S"),
-            query=query,
-            eval_timestamp=datetime.now().isoformat(),
-            claims=ClaimMetrics(),
-            citations=CitationMetrics(),
+            query=query, eval_timestamp=datetime.now().isoformat(),
+            claims=ClaimMetrics(), citations=CitationMetrics(),
             verified_findings=VerifiedFindingsMetrics(error="No report"),
-            per_claim=[],
-            warnings=warnings,
+            per_claim=[], warnings=["No report found in state"]
         )
 
     print(f"[EVAL] Starting evaluation...")
-    print(f"[EVAL] Report length: {len(report)} chars")
-    print(f"[EVAL] Sources available: {len(sources)}")
+    print(f"[EVAL] Report: {len(report)} chars | Sources: {len(sources)}")
 
-    # Initialize LLM for claim extraction and verification
-    if runnable_config:
-        configurable = Configuration.from_runnable_config(runnable_config)
-        api_key = get_api_key_for_model(config.model, runnable_config)
-    else:
-        # Default initialization
-        import os
-        api_key = os.environ.get("OPENAI_API_KEY")
+    # Parse Sources section to build citation -> URL mapping
+    citation_map = parse_sources_section(report)
+    print(f"[EVAL] Parsed {len(citation_map)} citations from Sources section")
+
+    # Initialize LLM
+    import os
+    api_key = os.environ.get("OPENAI_API_KEY")
 
     extraction_llm = init_chat_model(
-        model=config.model,
-        api_key=api_key,
+        model=config.model, api_key=api_key,
         tags=["langsmith:nostream", "eval:extraction"]
     ).with_structured_output(ExtractedClaims)
 
     verification_llm = init_chat_model(
-        model=config.model,
-        api_key=api_key,
+        model=config.model, api_key=api_key,
         tags=["langsmith:nostream", "eval:verify"]
     ).with_structured_output(VerificationVote)
 
@@ -377,67 +480,57 @@ async def evaluate_report(
     claims = claims[:config.max_claims]
     print(f"[EVAL] Extracted {len(claims)} claims")
 
-    if not claims:
-        warnings.append("No claims extracted from report")
+    # Pre-compute citations for each claim
+    claims_with_citations = []
+    for claim in claims:
+        citations = extract_citations_from_claim(claim, report)
+        claims_with_citations.append((claim, citations))
 
-    # Step 2: Verify each claim
-    print(f"[EVAL] Verifying claims...")
+    uncited_count = sum(1 for _, cits in claims_with_citations if not cits)
+    print(f"[EVAL] Claims with citations: {len(claims) - uncited_count} | Uncited (high-risk): {uncited_count}")
+
+    # Cost estimate
+    cost_est = estimate_cost(len(claims), uncited_count, config)
+    print(f"[EVAL] Estimated cost: ~${cost_est.estimated_cost_usd:.2f}")
+
+    if config.dry_run:
+        print(f"[EVAL] DRY RUN - not executing verification")
+        print(cost_est)
+        return EvalResult(
+            run_id=datetime.now().strftime("%Y%m%d_%H%M%S"),
+            query=query, eval_timestamp=datetime.now().isoformat(),
+            claims=ClaimMetrics(total=len(claims), uncited_count=uncited_count),
+            citations=CitationMetrics(total=len(citation_map)),
+            verified_findings=VerifiedFindingsMetrics(),
+            per_claim=[], warnings=["DRY RUN - no verification performed"],
+            cost_estimate=cost_est
+        )
+
+    # Step 2: Verify claims in parallel batches
+    print(f"[EVAL] Verifying claims (batch size: {config.parallel_batch_size})...")
     per_claim_results = []
 
-    for i, claim_text in enumerate(claims):
-        claim_id = f"c{i+1:03d}"
-        citation = extract_claim_citation(claim_text, report)
-        priority = prioritize_claim(claim_text, citation)
+    for batch_start in range(0, len(claims_with_citations), config.parallel_batch_size):
+        batch = claims_with_citations[batch_start:batch_start + config.parallel_batch_size]
 
-        # Find relevant sources using embeddings
-        try:
-            sources_with_passages = await find_relevant_passages(
-                claim_text,
-                sources,
-                top_k=config.top_k_sources
+        tasks = [
+            verify_single_claim_task(
+                claim_text=claim,
+                claim_id=f"c{batch_start + i + 1:03d}",
+                citations=citations,
+                citation_map=citation_map,
+                sources=sources,
+                llm=verification_llm,
+                config=config
             )
-        except Exception as e:
-            logging.warning(f"[EVAL] Source matching failed for {claim_id}: {e}")
-            sources_with_passages = []
+            for i, (claim, citations) in enumerate(batch)
+        ]
 
-        # Verify against best source
-        if sources_with_passages:
-            source, passage, score = sources_with_passages[0]
-            verification = await verify_single_claim(
-                claim_text, passage, source, verification_llm, claim_id
-            )
+        batch_results = await asyncio.gather(*tasks)
+        per_claim_results.extend(batch_results)
+        print(f"[EVAL] Verified {len(per_claim_results)}/{len(claims)} claims")
 
-            result = ClaimResult(
-                claim_id=claim_id,
-                claim_text=claim_text,
-                citation=citation,
-                priority=priority,
-                status=map_verification_status(verification["status"]),
-                confidence=verification["confidence"],
-                source_url=verification.get("source_url"),
-                source_title=verification.get("source_title"),
-                evidence_snippet=verification.get("evidence_snippet"),
-            )
-        else:
-            result = ClaimResult(
-                claim_id=claim_id,
-                claim_text=claim_text,
-                citation=citation,
-                priority=priority,
-                status="UNVERIFIABLE",
-                confidence=0.0,
-                source_url=None,
-                source_title=None,
-                evidence_snippet="No matching source found",
-            )
-
-        per_claim_results.append(result)
-
-        # Progress logging
-        if (i + 1) % 10 == 0:
-            print(f"[EVAL] Verified {i + 1}/{len(claims)} claims")
-
-    # Step 3: Aggregate claim metrics
+    # Step 3: Aggregate metrics
     true_count = sum(1 for r in per_claim_results if r.status == "TRUE")
     false_count = sum(1 for r in per_claim_results if r.status == "FALSE")
     unverifiable_count = sum(1 for r in per_claim_results if r.status == "UNVERIFIABLE")
@@ -448,33 +541,34 @@ async def evaluate_report(
         true_count=true_count,
         false_count=false_count,
         unverifiable_count=unverifiable_count,
+        uncited_count=uncited_count,
         hallucination_rate=false_count / total if total > 0 else 0.0,
         grounding_rate=true_count / total if total > 0 else 0.0,
     )
 
-    # Add warnings for quality issues
+    # Citation metrics
+    cited_claims = [r for r in per_claim_results if not r.is_uncited]
+    supported_citations = sum(1 for r in cited_claims if r.status == "TRUE")
+
+    citation_metrics = CitationMetrics(
+        total=sum(len(r.citations) for r in per_claim_results),
+        valid=len(citation_map),
+        supported=supported_citations,
+        accuracy=supported_citations / len(cited_claims) if cited_claims else 1.0,
+        unique_sources=len(set(c for r in per_claim_results for c in r.citations))
+    )
+
+    # Warnings
     if claim_metrics.hallucination_rate > 0.02:
         warnings.append(f"Hallucination rate ({claim_metrics.hallucination_rate:.1%}) exceeds 2% target")
     if claim_metrics.grounding_rate < 0.85:
         warnings.append(f"Grounding rate ({claim_metrics.grounding_rate:.1%}) below 85% target")
+    if uncited_count > 0:
+        warnings.append(f"{uncited_count} uncited factual claims (high-risk)")
 
-    # Step 4: Check citations
-    print(f"[EVAL] Checking citations...")
-    citation_metrics = CitationMetrics() if not config.verify_citations else check_citations(report, sources)
+    # Check Verified Findings
+    vf_metrics = check_verified_findings(state) if config.check_verified_findings else VerifiedFindingsMetrics()
 
-    if citation_metrics.accuracy < 0.90:
-        warnings.append(f"Citation accuracy ({citation_metrics.accuracy:.1%}) below 90% target")
-
-    # Step 5: Check Verified Findings
-    print(f"[EVAL] Checking Verified Findings...")
-    vf_metrics = VerifiedFindingsMetrics() if not config.check_verified_findings else check_verified_findings(state)
-
-    if vf_metrics.error:
-        warnings.append(f"Verified Findings issue: {vf_metrics.error}")
-    if not vf_metrics.all_pass:
-        warnings.append("Verified Findings contains non-PASS quotes")
-
-    # Build final result
     result = EvalResult(
         run_id=datetime.now().strftime("%Y%m%d_%H%M%S"),
         query=query,
@@ -484,16 +578,18 @@ async def evaluate_report(
         verified_findings=vf_metrics,
         per_claim=per_claim_results,
         warnings=warnings,
+        cost_estimate=cost_est
     )
 
     # Print summary
     print(f"\n[EVAL] ========== EVALUATION COMPLETE ==========")
     print(f"[EVAL] Claims: {true_count}/{total} TRUE ({claim_metrics.grounding_rate:.0%} grounding)")
     print(f"[EVAL] Hallucination rate: {claim_metrics.hallucination_rate:.1%} (target: <2%)")
-    print(f"[EVAL] Citations: {citation_metrics.verified}/{citation_metrics.total} verified ({citation_metrics.accuracy:.0%})")
-    print(f"[EVAL] Verified Findings: {vf_metrics.quotes} quotes, diversity={vf_metrics.source_diversity}")
+    print(f"[EVAL] Uncited claims: {uncited_count} (high-risk)")
+    print(f"[EVAL] Citation accuracy: {citation_metrics.accuracy:.0%}")
+    print(f"[EVAL] Actual cost: ~${cost_est.estimated_cost_usd:.2f}")
     if warnings:
-        print(f"[EVAL] Warnings: {len(warnings)}")
+        print(f"[EVAL] Warnings ({len(warnings)}):")
         for w in warnings:
             print(f"[EVAL]   - {w}")
     print(f"[EVAL] ============================================\n")
