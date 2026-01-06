@@ -197,9 +197,13 @@ async def verify_evidence(state: AgentState, config: RunnableConfig) -> dict:
     # Step 5: Log results
     total = len(verified_snippets)
     logging.info(f"[VERIFY_EVIDENCE] Verified {total}: {pass_count} PASS, {fail_count} FAIL")
-    print(f"[VERIFY_EVIDENCE] ✓ {pass_count}/{total} snippets verified (PASS)")
+    print(f"[VERIFY] ✓ {pass_count}/{total} snippets verified (PASS)")
     if fail_count > 0:
-        print(f"[VERIFY_EVIDENCE] ⚠️ {fail_count}/{total} snippets failed verification")
+        print(f"[VERIFY] ⚠️ {fail_count}/{total} snippets failed verification")
+
+    # Log source diversity for PASS snippets
+    pass_sources = set(s.get("source_id", s.get("url", "")) for s in verified_snippets if s.get("status") == "PASS")
+    print(f"[VERIFY] Source diversity: {len(pass_sources)} sources with PASS quotes")
 
     # Return with override to replace existing snippets
     return {

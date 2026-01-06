@@ -376,11 +376,11 @@ class Configuration(BaseModel):
     
     # Human Review Mode - Council as Advisor, Human as Authority
     review_mode: str = Field(
-        default="none",
+        default="brief",
         metadata={
             "x_oap_ui_config": {
                 "type": "select",
-                "default": "none",
+                "default": "brief",
                 "description": "Human review checkpoints. 'none'=fully automated, 'brief'=review brief before research, 'full'=review brief AND final report",
                 "options": [
                     {"label": "None (Fully Automated)", "value": "none"},

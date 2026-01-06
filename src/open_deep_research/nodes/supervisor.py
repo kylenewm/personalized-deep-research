@@ -146,6 +146,7 @@ async def supervisor_tools(state: SupervisorState, config: RunnableConfig) -> Co
     ]
 
     if conduct_research_calls:
+        print(f"[RESEARCH] Iteration {research_iterations}: {len(conduct_research_calls)} research tasks")
         try:
             # Limit concurrent research units to prevent resource exhaustion (use effective values for test mode)
             max_units = configurable.get_effective_max_concurrent_research_units()

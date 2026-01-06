@@ -53,6 +53,26 @@ def sanitize_for_quotes(html: str) -> str:
     text = text.replace('&#39;', "'")
     text = text.replace('&apos;', "'")
 
+    # Step 6b: Strip markdown formatting (content may contain markdown from APIs)
+    # Headers: # Heading, ## Heading, etc.
+    text = re.sub(r'^#{1,6}\s+', '', text, flags=re.MULTILINE)
+
+    # Bold/italic markers
+    text = re.sub(r'\*\*(.+?)\*\*', r'\1', text)  # **bold**
+    text = re.sub(r'\*(.+?)\*', r'\1', text)       # *italic*
+    text = re.sub(r'__(.+?)__', r'\1', text)       # __bold__
+    text = re.sub(r'_(.+?)_', r'\1', text)         # _italic_
+
+    # List markers at start of line
+    text = re.sub(r'^\s*[-*+]\s+', '', text, flags=re.MULTILINE)
+    text = re.sub(r'^\s*\d+\.\s+', '', text, flags=re.MULTILINE)
+
+    # Links: [text](url) → text
+    text = re.sub(r'\[([^\]]+)\]\([^)]+\)', r'\1', text)
+
+    # Inline code backticks
+    text = re.sub(r'`([^`]+)`', r'\1', text)
+
     # Step 7: Normalize whitespace within lines (but preserve paragraph breaks)
     # First, normalize multiple spaces to single space
     text = re.sub(r'[ \t]+', ' ', text)

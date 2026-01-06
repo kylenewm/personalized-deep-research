@@ -334,6 +334,10 @@ IMPORTANT: Copy the "## Verified Findings" section above into your report exactl
     # Step 5: Post-check - enforce Verified Findings section integrity
     generated_report = enforce_verified_section(generated_report, verified_md)
 
+    # Count citations in report for logging
+    citation_count = len(re.findall(r'\[\d+\]', generated_report))
+    print(f"[REPORT] ✓ Complete ({len(generated_report)} chars, {citation_count} citations)")
+
     # Step 6: Human review checkpoint (if review_mode == "full")
     if configurable.review_mode == "full":
         # Get any flagged issues from fact-check

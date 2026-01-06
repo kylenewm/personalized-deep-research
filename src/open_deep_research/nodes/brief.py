@@ -66,7 +66,9 @@ async def write_research_brief(state: AgentState, config: RunnableConfig) -> Com
     # Skip on revisions - context already gathered on first attempt, no need to re-search
     context_block = ""
     revision_count = state.get("council_revision_count", 0)
+    print(f"[BRIEF] Generating research plan...")
     if configurable.enable_brief_context and revision_count == 0:
+        print(f"[BRIEF] Gathering context from recent sources...")
         try:
             brief_context = await gather_brief_context(
                 user_messages=user_messages,
@@ -77,6 +79,9 @@ async def write_research_brief(state: AgentState, config: RunnableConfig) -> Com
                 include_news=configurable.brief_context_include_news
             )
             context_block = format_brief_context(brief_context, configurable.brief_context_days)
+            if brief_context.sources_used:
+                entities_preview = brief_context.key_entities[:3] if brief_context.key_entities else []
+                print(f"[BRIEF] Context: {len(brief_context.sources_used)} sources, entities: {entities_preview}")
         except Exception as e:
             # Log but don't fail - context is optional enhancement
             import logging
@@ -98,6 +103,7 @@ async def write_research_brief(state: AgentState, config: RunnableConfig) -> Com
         prompt_content += f"\n\nPREVIOUS FEEDBACK TO ADDRESS:\n{feedback_on_brief[-1]}"
 
     response = await research_model.ainvoke([HumanMessage(content=prompt_content)])
+    print(f"[BRIEF] ✓ Brief generated ({len(response.research_brief)} chars)")
 
     # Step 3: Initialize supervisor with research brief and instructions
     # Use effective values (reduced in test mode)
@@ -155,6 +161,7 @@ async def validate_brief(state: AgentState, config: RunnableConfig) -> Command[L
     # Get council feedback (advisory only, not approve/reject)
     council_feedback = ""
     if configurable.use_council:
+        print(f"[COUNCIL] Voting on brief...")
         council_config = CouncilConfig(
             models=configurable.council_models,
             min_consensus_for_approve=configurable.council_min_consensus,
@@ -164,6 +171,8 @@ async def validate_brief(state: AgentState, config: RunnableConfig) -> Command[L
         verdict = await council_vote_on_brief(brief, council_config, config)
         log_council_decision(verdict)
 
+        print(f"[COUNCIL] Result: {verdict.decision.upper()} ({verdict.consensus_score:.0%} consensus)")
+
         # Format council feedback for human review
         council_feedback = f"""
 COUNCIL FEEDBACK (Advisory):
@@ -172,11 +181,6 @@ Consensus: {verdict.consensus_score:.0%}
 
 {verdict.synthesized_feedback}
 """
-        print(f"\n{'='*60}")
-        print(f"COUNCIL FEEDBACK (Advisory - Human has final say)")
-        print(f"Decision: {verdict.decision.upper()}")
-        print(f"Consensus: {verdict.consensus_score:.0%}")
-        print(f"{'='*60}\n")
 
     # Human review checkpoint
     if configurable.review_mode != "none":

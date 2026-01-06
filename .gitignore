@@ -77,3 +77,4 @@ metrics/
 # Local development
 *.local
 .cache/
+.langgraph_api/

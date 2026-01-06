@@ -48,6 +48,23 @@ def strip_navigation(content: str) -> str:
     # Remove anchor links like (#section)
     content = re.sub(r'\(#[^)]+\)', '', content)
 
+    # Strip markdown formatting to get clean text for quotes
+    # Headers: # Heading, ## Heading, etc.
+    content = re.sub(r'^#{1,6}\s+', '', content, flags=re.MULTILINE)
+
+    # Bold/italic markers
+    content = re.sub(r'\*\*(.+?)\*\*', r'\1', content)  # **bold**
+    content = re.sub(r'\*(.+?)\*', r'\1', content)       # *italic*
+    content = re.sub(r'__(.+?)__', r'\1', content)       # __bold__
+    content = re.sub(r'_(.+?)_', r'\1', content)         # _italic_
+
+    # List markers at start of line
+    content = re.sub(r'^\s*[-*+]\s+', '', content, flags=re.MULTILINE)
+    content = re.sub(r'^\s*\d+\.\s+', '', content, flags=re.MULTILINE)
+
+    # Inline code backticks
+    content = re.sub(r'`([^`]+)`', r'\1', content)
+
     # Common navigation line patterns (case-insensitive)
     nav_line_patterns = [
         r'^#{1,6}\s*(Navigation|Navigation Menu|Contents|Table of Contents|Menu|Search)\s*$',
