@@ -417,34 +417,289 @@ def export_to_html(
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>Research Report</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Merriweather:ital,wght@0,400;0,700;1,400&display=swap" rel="stylesheet">
     <style>
+        :root {{
+            --primary: {config.primary_color};
+            --primary-light: #dbeafe;
+            --text: #1e293b;
+            --text-muted: #64748b;
+            --bg: #ffffff;
+            --bg-subtle: #f8fafc;
+            --border: #e2e8f0;
+            --shadow: 0 1px 3px rgba(0,0,0,0.1), 0 1px 2px rgba(0,0,0,0.06);
+            --shadow-lg: 0 10px 15px -3px rgba(0,0,0,0.1), 0 4px 6px -2px rgba(0,0,0,0.05);
+        }}
+
+        * {{
+            box-sizing: border-box;
+        }}
+
         body {{
-            font-family: {config.font_family};
-            max-width: 800px;
-            margin: 2em auto;
-            padding: 0 1em;
-            line-height: 1.6;
-            color: #1a1a1a;
+            font-family: 'Inter', {config.font_family};
+            max-width: 720px;
+            margin: 0 auto;
+            padding: 3rem 1.5rem;
+            line-height: 1.7;
+            color: var(--text);
+            background: var(--bg);
+            -webkit-font-smoothing: antialiased;
         }}
+
+        /* Typography */
         h1 {{
-            color: {config.primary_color};
-            border-bottom: 2px solid {config.primary_color};
-            padding-bottom: 0.3em;
+            font-family: 'Merriweather', Georgia, serif;
+            font-size: 2.25rem;
+            font-weight: 700;
+            color: var(--text);
+            margin: 0 0 1.5rem 0;
+            line-height: 1.3;
+            letter-spacing: -0.02em;
         }}
-        h2 {{ color: #222; border-bottom: 1px solid #eee; padding-bottom: 0.2em; }}
-        h3 {{ color: #333; }}
-        a {{ color: {config.primary_color}; }}
-        code {{ background: #f4f4f5; padding: 0.2em 0.4em; border-radius: 3px; }}
-        pre {{ background: #f4f4f5; padding: 1em; border-radius: 4px; overflow-x: auto; }}
-        blockquote {{ border-left: 3px solid {config.primary_color}; margin: 1em 0; padding: 0.5em 1em; background: #f9f9f9; }}
-        table {{ border-collapse: collapse; width: 100%; }}
-        th, td {{ border: 1px solid #ddd; padding: 0.5em; text-align: left; }}
-        th {{ background: #f5f5f5; }}
+
+        h2 {{
+            font-family: 'Inter', {config.font_family};
+            font-size: 1.375rem;
+            font-weight: 600;
+            color: var(--text);
+            margin: 2.5rem 0 1rem 0;
+            padding-bottom: 0.5rem;
+            border-bottom: 2px solid var(--primary);
+        }}
+
+        h3 {{
+            font-size: 1.125rem;
+            font-weight: 600;
+            color: var(--text);
+            margin: 2rem 0 0.75rem 0;
+        }}
+
+        p {{
+            margin: 0 0 1.25rem 0;
+        }}
+
+        a {{
+            color: var(--primary);
+            text-decoration: none;
+            border-bottom: 1px solid transparent;
+            transition: border-color 0.15s ease;
+        }}
+
+        a:hover {{
+            border-bottom-color: var(--primary);
+        }}
+
+        strong {{
+            font-weight: 600;
+            color: var(--text);
+        }}
+
+        /* Lists */
+        ul, ol {{
+            margin: 0 0 1.5rem 0;
+            padding-left: 1.5rem;
+        }}
+
+        li {{
+            margin-bottom: 0.5rem;
+        }}
+
+        li::marker {{
+            color: var(--primary);
+        }}
+
+        /* Table of Contents */
+        h2#table-of-contents {{
+            font-size: 0.875rem;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            color: var(--text-muted);
+            border-bottom: none;
+            margin-bottom: 0.75rem;
+        }}
+
+        h2#table-of-contents + ul {{
+            background: var(--bg-subtle);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            padding: 1rem 1.5rem;
+            list-style: none;
+            margin-bottom: 2.5rem;
+        }}
+
+        h2#table-of-contents + ul li {{
+            margin-bottom: 0.375rem;
+        }}
+
+        h2#table-of-contents + ul a {{
+            color: var(--text);
+            font-weight: 500;
+        }}
+
+        h2#table-of-contents + ul a:hover {{
+            color: var(--primary);
+        }}
+
+        /* Verified Findings - Hero Section */
+        h2#verified-findings {{
+            color: var(--primary);
+        }}
+
+        h2#verified-findings + ul {{
+            background: linear-gradient(135deg, var(--bg-subtle) 0%, #f1f5f9 100%);
+            border: 1px solid var(--border);
+            border-left: 4px solid var(--primary);
+            border-radius: 0 8px 8px 0;
+            padding: 1.5rem 1.75rem;
+            list-style: none;
+            margin: 1rem 0 2rem 0;
+            box-shadow: var(--shadow);
+        }}
+
+        h2#verified-findings + ul li {{
+            margin-bottom: 1.25rem;
+            padding-bottom: 1.25rem;
+            border-bottom: 1px solid var(--border);
+        }}
+
+        h2#verified-findings + ul li:last-child {{
+            margin-bottom: 0;
+            padding-bottom: 0;
+            border-bottom: none;
+        }}
+
+        h2#verified-findings + ul li strong {{
+            display: block;
+            color: var(--primary);
+            font-size: 0.9375rem;
+            margin-bottom: 0.375rem;
+        }}
+
+        /* Blockquotes */
+        blockquote {{
+            border-left: 4px solid var(--primary);
+            margin: 1.5rem 0;
+            padding: 1rem 1.5rem;
+            background: var(--bg-subtle);
+            border-radius: 0 8px 8px 0;
+            font-style: italic;
+            color: var(--text-muted);
+        }}
+
+        blockquote p:last-child {{
+            margin-bottom: 0;
+        }}
+
+        /* Code */
+        code {{
+            font-family: 'SF Mono', Consolas, monospace;
+            font-size: 0.875em;
+            background: var(--bg-subtle);
+            border: 1px solid var(--border);
+            padding: 0.2em 0.4em;
+            border-radius: 4px;
+        }}
+
+        pre {{
+            background: #1e293b;
+            color: #e2e8f0;
+            padding: 1.25rem;
+            border-radius: 8px;
+            overflow-x: auto;
+            box-shadow: var(--shadow-lg);
+        }}
+
+        pre code {{
+            background: none;
+            border: none;
+            padding: 0;
+            color: inherit;
+        }}
+
+        /* Tables */
+        table {{
+            width: 100%;
+            border-collapse: collapse;
+            margin: 1.5rem 0;
+            font-size: 0.9375rem;
+            box-shadow: var(--shadow);
+            border-radius: 8px;
+            overflow: hidden;
+        }}
+
+        th {{
+            background: var(--bg-subtle);
+            font-weight: 600;
+            text-align: left;
+            padding: 0.75rem 1rem;
+            border-bottom: 2px solid var(--border);
+        }}
+
+        td {{
+            padding: 0.75rem 1rem;
+            border-bottom: 1px solid var(--border);
+        }}
+
+        tr:last-child td {{
+            border-bottom: none;
+        }}
+
+        tr:hover td {{
+            background: var(--bg-subtle);
+        }}
+
+        /* Sources Section */
+        h2#sources {{
+            margin-top: 3rem;
+        }}
+
+        h2#sources + ol {{
+            font-size: 0.875rem;
+            color: var(--text-muted);
+            line-height: 1.8;
+        }}
+
+        h2#sources + ol a {{
+            color: var(--text);
+            font-weight: 500;
+        }}
+
+        /* Horizontal rule */
+        hr {{
+            border: none;
+            border-top: 2px solid var(--border);
+            margin: 2.5rem 0;
+        }}
+
+        /* Footer */
+        footer {{
+            margin-top: 4rem;
+            padding-top: 1.5rem;
+            border-top: 1px solid var(--border);
+            font-size: 0.8125rem;
+            color: var(--text-muted);
+            text-align: center;
+        }}
+
+        /* Print styles */
+        @media print {{
+            body {{
+                max-width: none;
+                padding: 0;
+            }}
+            h2#verified-findings + ul {{
+                box-shadow: none;
+                border: 1px solid #ccc;
+            }}
+        }}
     </style>
 </head>
 <body>
 {html_body}
-<footer style="margin-top: 3em; padding-top: 1em; border-top: 1px solid #eee; font-size: 0.9em; color: #666;">
+<footer>
     {config.branding_text}
 </footer>
 </body>
