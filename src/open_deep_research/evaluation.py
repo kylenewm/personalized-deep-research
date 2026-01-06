@@ -225,13 +225,24 @@ def extract_citations_from_claim(claim: str, report: str) -> List[int]:
 
 
 def find_source_by_url(url: str, sources: List[SourceRecord]) -> Optional[SourceRecord]:
-    """Find a source in source_store by URL (fuzzy match)."""
+    """Find a source in source_store by URL (fuzzy match).
+
+    If multiple sources match the same URL, returns the one with the longest content.
+    This handles the duplicate source issue where truncated and full versions coexist.
+    """
     url_clean = url.rstrip('/').lower()
+    matches = []
+
     for source in sources:
         source_url = source.get("url", "").rstrip('/').lower()
         if source_url == url_clean or url_clean in source_url or source_url in url_clean:
-            return source
-    return None
+            matches.append(source)
+
+    if not matches:
+        return None
+
+    # Return the source with the longest content (prefer full over truncated)
+    return max(matches, key=lambda s: len(s.get("content", "")))
 
 
 def estimate_cost(num_claims: int, num_uncited: int, config: EvalConfig) -> CostEstimate:
@@ -302,6 +313,31 @@ def map_verification_status(status: str) -> str:
     return mapping.get(status, "UNVERIFIABLE")
 
 
+def extract_key_terms(claim: str) -> List[str]:
+    """Extract key terms from a claim for targeted passage search.
+
+    Finds named entities, acronyms, quoted terms, and proper nouns that
+    should be searched as exact strings rather than individual words.
+    """
+    key_terms = []
+
+    # 1. Quoted strings (e.g., "Project Moonshot", "defense-in-depth")
+    quoted = re.findall(r'"([^"]+)"', claim)
+    key_terms.extend(quoted)
+
+    # 2. Acronyms and codes (e.g., AEF-1, M-25-22, LITHOS)
+    acronyms = re.findall(r'\b[A-Z][A-Z0-9-]+(?:-\d+)?\b', claim)
+    key_terms.extend(acronyms)
+
+    # 3. Proper nouns (capitalized phrases like "Digital Trust Centre")
+    # Match 2-4 consecutive capitalized words
+    proper_nouns = re.findall(r'\b[A-Z][a-z]+(?:\s+[A-Z][a-z]+){1,3}\b', claim)
+    key_terms.extend(proper_nouns)
+
+    # Deduplicate and filter short terms
+    return list(set(t for t in key_terms if len(t) >= 3))
+
+
 async def verify_claim_against_source(
     claim: str,
     source: SourceRecord,
@@ -310,18 +346,37 @@ async def verify_claim_against_source(
 ) -> Tuple[str, float, str]:
     """Verify a claim against a specific source.
 
+    Uses a two-phase passage extraction:
+    1. First, search for key terms (acronyms, quoted strings, proper nouns)
+    2. Fall back to keyword-based paragraph matching
+
     Returns: (status, confidence, evidence_snippet)
     """
     content = source.get("content", "")
     if not content:
         return "UNVERIFIABLE", 0.0, "Source has no content"
 
-    # Extract best paragraph from source for this claim
-    claim_words = set(w.lower() for w in claim.split() if len(w) > 3)
+    content_lower = content.lower()
     paragraphs = content.split('\n\n')
 
+    # Phase 1: Search for key terms (exact substring match)
+    key_terms = extract_key_terms(claim)
+    term_passages = []
+
+    for term in key_terms:
+        term_lower = term.lower()
+        if term_lower in content_lower:
+            # Find the paragraph containing this term
+            for para in paragraphs:
+                if term_lower in para.lower() and len(para) >= 50:
+                    term_passages.append(para)
+                    break
+
+    # Phase 2: Keyword-based paragraph scoring (fallback)
+    claim_words = set(w.lower() for w in claim.split() if len(w) > 3)
     best_para = ""
     best_score = 0
+
     for para in paragraphs:
         if len(para) < 50:
             continue
@@ -330,7 +385,21 @@ async def verify_claim_against_source(
             best_score = score
             best_para = para
 
-    passage = best_para[:1500] if best_para else content[:1500]
+    # Combine: prioritize term-matched passages, then keyword-matched
+    all_passages = term_passages + ([best_para] if best_para else [])
+
+    if all_passages:
+        # Deduplicate and take up to 2 passages
+        seen = set()
+        unique_passages = []
+        for p in all_passages:
+            p_key = p[:100]  # Use first 100 chars as key
+            if p_key not in seen:
+                seen.add(p_key)
+                unique_passages.append(p)
+        passage = "\n\n".join(unique_passages[:2])[:2000]
+    else:
+        passage = content[:1500]
 
     result = await verify_single_claim(claim, passage, source, llm, claim_id)
     return (
@@ -455,6 +524,21 @@ async def evaluate_report(
 
     print(f"[EVAL] Starting evaluation...")
     print(f"[EVAL] Report: {len(report)} chars | Sources: {len(sources)}")
+
+    # Check for duplicate sources and log stats
+    url_counts = {}
+    for source in sources:
+        url = source.get("url", "").rstrip('/').lower()
+        if url:
+            if url not in url_counts:
+                url_counts[url] = []
+            url_counts[url].append(len(source.get("content", "")))
+
+    duplicates = {url: lengths for url, lengths in url_counts.items() if len(lengths) > 1}
+    if duplicates:
+        print(f"[EVAL] Found {len(duplicates)} URLs with duplicate sources (will use longest content):")
+        for url, lengths in list(duplicates.items())[:3]:  # Show first 3
+            print(f"[EVAL]   - {url[:60]}... content lengths: {sorted(lengths)}")
 
     # Parse Sources section to build citation -> URL mapping
     citation_map = parse_sources_section(report)

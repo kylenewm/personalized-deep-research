@@ -78,3 +78,6 @@ metrics/
 *.local
 .cache/
 .langgraph_api/
+
+# Eval output files
+eval_*.json
