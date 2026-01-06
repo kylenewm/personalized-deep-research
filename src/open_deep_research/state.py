@@ -185,6 +185,9 @@ class AgentState(MessagesState):
     # Evaluation Framework (optional, run_evaluation config)
     eval_result: Optional[dict] = None  # Evaluation metrics if run_evaluation=True
 
+    # Layer 3: Claim pre-check warnings
+    claim_warnings: Annotated[list[str], override_reducer] = []  # Unverifiable claims detected
+
 class SupervisorState(TypedDict):
     """State for the supervisor that manages research tasks."""
 

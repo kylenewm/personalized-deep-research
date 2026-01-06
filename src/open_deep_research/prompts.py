@@ -296,6 +296,14 @@ CITATION INTEGRITY:
 WHEN IN DOUBT:
 - Omit the claim entirely rather than risk inaccuracy.
 - It's better to have a shorter, accurate report than a longer, unverifiable one.
+
+CLAIM TRACEABILITY REQUIREMENT:
+For EVERY factual claim you write, you must be able to point to:
+1. The specific citation number [N] from the Findings
+2. The exact phrase or data point in that source that supports it
+
+If you cannot trace a claim to a specific source quote, DO NOT include it.
+Write "Evidence limited for [topic]" instead of inventing unsupported claims.
 </CRITICAL GROUNDING RULES>
 
 Please create a detailed answer to the overall research brief that:

@@ -10,13 +10,147 @@ from langgraph.types import interrupt
 from open_deep_research.configuration import Configuration
 from open_deep_research.models import configurable_model
 from open_deep_research.prompts import final_report_generation_prompt
-from open_deep_research.state import AgentState, EvidenceSnippet
+from open_deep_research.state import AgentState, EvidenceSnippet, SourceRecord
 from open_deep_research.utils import (
     get_api_key_for_model,
     get_model_token_limit,
     get_today_str,
     is_token_limit_exceeded,
 )
+
+
+def validate_citations_before_report(
+    notes: str,
+    source_store: List[SourceRecord]
+) -> List[str]:
+    """Layer 1: Check that cited sources actually contain cited content.
+
+    Parses [N] citations from research notes and verifies key terms
+    from the citation context appear in the corresponding source.
+
+    Args:
+        notes: Research notes with [N] citations
+        source_store: List of source records with url and content
+
+    Returns:
+        List of warning strings for citation mismatches
+    """
+    warnings = []
+
+    if not notes or not source_store:
+        return warnings
+
+    # Build URL -> source mapping (prefer longest content for duplicates)
+    url_to_source = {}
+    for source in source_store:
+        url = source.get("url", "").rstrip("/").lower()
+        if not url:
+            continue
+        existing = url_to_source.get(url)
+        if not existing or len(source.get("content", "")) > len(existing.get("content", "")):
+            url_to_source[url] = source
+
+    # Parse Sources section to get citation number -> URL mapping
+    sources_match = re.search(r'## Sources\n(.*?)(?=\n## |\Z)', notes, re.DOTALL)
+    if not sources_match:
+        # Try simpler pattern for inline sources
+        sources_match = re.search(r'Sources:?\n(.*?)$', notes, re.DOTALL)
+
+    if not sources_match:
+        return warnings  # No sources section found
+
+    sources_text = sources_match.group(1)
+
+    # Parse citation lines: [N] Title: URL
+    citation_to_url = {}
+    pattern = r'\[(\d+)\]\s*(.+?):\s*(https?://[^\s\n]+)'
+    for match in re.finditer(pattern, sources_text):
+        num = int(match.group(1))
+        citation_to_url[num] = match.group(3).strip().rstrip("/").lower()
+
+    # Find claims with citations in the notes body (before Sources section)
+    body_end = sources_match.start() if sources_match else len(notes)
+    notes_body = notes[:body_end]
+
+    # Extract key terms that should be verifiable
+    # Pattern: find text near citations like "claim text [1]" or "[1] claim text"
+    claim_patterns = [
+        r'([^.\n]{20,100})\s*\[(\d+)\]',  # claim before citation
+        r'\[(\d+)\]\s*([^.\n]{20,100})',  # citation before claim
+    ]
+
+    checked_citations = set()
+
+    for pattern in claim_patterns:
+        for match in re.finditer(pattern, notes_body):
+            if pattern.startswith(r'\['):
+                cit_num, claim_text = int(match.group(1)), match.group(2)
+            else:
+                claim_text, cit_num = match.group(1), int(match.group(2))
+
+            if cit_num in checked_citations:
+                continue
+            checked_citations.add(cit_num)
+
+            # Get the source URL for this citation
+            url = citation_to_url.get(cit_num)
+            if not url:
+                continue
+
+            # Find source content
+            source = url_to_source.get(url)
+            if not source:
+                # Try partial match
+                for stored_url, stored_source in url_to_source.items():
+                    if url in stored_url or stored_url in url:
+                        source = stored_source
+                        break
+
+            if not source:
+                warnings.append(f"[{cit_num}] Source not in store: {url[:50]}...")
+                continue
+
+            content = source.get("content", "").lower()
+            if len(content) < 100:
+                warnings.append(f"[{cit_num}] Source content too short ({len(content)} chars)")
+                continue
+
+            # Extract key terms from claim (acronyms, proper nouns, numbers)
+            key_terms = []
+
+            # Acronyms: AEF-1, M-25-22, etc.
+            key_terms.extend(re.findall(r'\b[A-Z][A-Z0-9-]+(?:-\d+)?\b', claim_text))
+
+            # Proper nouns (2+ capitalized words)
+            key_terms.extend(re.findall(r'\b[A-Z][a-z]+(?:\s+[A-Z][a-z]+)+\b', claim_text))
+
+            # Numbers with context
+            key_terms.extend(re.findall(r'\d+(?:\.\d+)?%', claim_text))
+            key_terms.extend(re.findall(r'\$[\d,]+', claim_text))
+
+            # Check if key terms appear in source
+            missing_terms = []
+            for term in key_terms:
+                if term.lower() not in content:
+                    missing_terms.append(term)
+
+            if missing_terms and len(missing_terms) >= len(key_terms) * 0.5:
+                # More than half of key terms missing
+                warnings.append(
+                    f"[{cit_num}] Key terms not in source: {', '.join(missing_terms[:3])}"
+                )
+
+    # Log warnings
+    if warnings:
+        print(f"[LAYER1] Citation pre-check found {len(warnings)} issues:")
+        for w in warnings[:5]:  # Show first 5
+            print(f"[LAYER1]   {w}")
+        if len(warnings) > 5:
+            print(f"[LAYER1]   ... and {len(warnings) - 5} more")
+    else:
+        print(f"[LAYER1] Citation pre-check passed ({len(checked_citations)} citations checked)")
+
+    return warnings
 
 # Default character caps for prompt truncation (token limit handling)
 DEFAULT_MESSAGES_CAP_CHARS = 8000
@@ -218,7 +352,12 @@ async def final_report_generation(state: AgentState, config: RunnableConfig):
     """
     # Step 1: Extract research findings and prepare state cleanup
     notes = state.get("notes", [])
+    source_store = state.get("source_store", [])
     configurable = Configuration.from_runnable_config(config)
+
+    # Layer 1: Citation pre-check (validate citations before generating report)
+    findings = "\n".join(notes)
+    citation_warnings = validate_citations_before_report(findings, source_store)
 
     # Don't clear source_store if evaluation is enabled (eval needs sources)
     cleared_state = {
@@ -227,8 +366,6 @@ async def final_report_generation(state: AgentState, config: RunnableConfig):
     }
     if not configurable.run_evaluation:
         cleared_state["source_store"] = {"type": "override", "value": []}  # Clear sources after report
-
-    findings = "\n".join(notes)
 
     # Step 2: Configure the final report generation model
     writer_model_config = {

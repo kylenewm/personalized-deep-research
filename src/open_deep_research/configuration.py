@@ -494,7 +494,20 @@ class Configuration(BaseModel):
         }
     )
 
-    # Evaluation Framework Configuration
+    # Layer 3: Claim Pre-Check Configuration
+    # Pre-report verification of key factual claims
+    claim_pre_check: bool = Field(
+        default=True,
+        metadata={
+            "x_oap_ui_config": {
+                "type": "boolean",
+                "default": True,
+                "description": "Run claim pre-check before report generation. Extracts claims and verifies key terms exist in sources. Adds ~$0.01/run."
+            }
+        }
+    )
+
+    # Layer 4: Evaluation Framework Configuration
     # Post-hoc evaluation of report quality (separate from pipeline)
     run_evaluation: bool = Field(
         default=False,
@@ -502,7 +515,7 @@ class Configuration(BaseModel):
             "x_oap_ui_config": {
                 "type": "boolean",
                 "default": False,
-                "description": "Run evaluation framework after report generation. Produces structured metrics JSON. Adds ~$0.30/eval."
+                "description": "Run evaluation framework after report generation. Produces structured metrics JSON. Adds ~$0.15/eval."
             }
         }
     )
