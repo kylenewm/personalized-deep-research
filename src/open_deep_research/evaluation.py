@@ -238,7 +238,9 @@ def extract_citations_from_claim(claim: str, report: str) -> List[int]:
         'couldn', 'didn', 'doesn', 'hadn', 'hasn', 'haven', 'isn', 'ma', 'mightn',
         'mustn', 'needn', 'shan', 'shouldn', 'wasn', 'weren', 'won', 'wouldn'
     }
-    claim_words = set(w.lower() for w in claim.split() if len(w) > 1 and w.lower() not in STOPWORDS)
+    # Use regex to extract words without punctuation (split() keeps punctuation attached)
+    claim_tokens = re.findall(r'\b\w+\b', claim.lower())
+    claim_words = set(w for w in claim_tokens if len(w) > 1 and w not in STOPWORDS)
 
     # Require minimum 2 words to match (avoid matching with nothing)
     if not claim_words:
@@ -257,8 +259,8 @@ def extract_citations_from_claim(claim: str, report: str) -> List[int]:
                 # Found a matching paragraph - extract citations from it
                 citations = [int(m) for m in re.findall(r'\[(\d+)\]', para)]
                 if citations:
-                    # Limit to reasonable number (paragraph shouldn't have >5 citations)
-                    if len(citations) <= 5:
+                    # Limit to reasonable number (paragraph shouldn't have >10 citations)
+                    if len(citations) <= 10:
                         return list(set(citations))
 
     # Strategy 2: Exact substring match (for short claims or fallback)
@@ -267,7 +269,7 @@ def extract_citations_from_claim(claim: str, report: str) -> List[int]:
         # Look for citations within 200 chars after the claim starts
         region = report_body[idx:idx + 300]
         citations = [int(m) for m in re.findall(r'\[(\d+)\]', region)]
-        if citations and len(citations) <= 5:
+        if citations and len(citations) <= 10:
             return list(set(citations))
 
     # Strategy 3: Fuzzy match for very short claims
@@ -276,7 +278,7 @@ def extract_citations_from_claim(claim: str, report: str) -> List[int]:
         idx = report_body.lower().find(claim_lower)
         region = report_body[max(0, idx-50):idx + len(claim) + 100]
         citations = [int(m) for m in re.findall(r'\[(\d+)\]', region)]
-        if citations and len(citations) <= 5:
+        if citations and len(citations) <= 10:
             return list(set(citations))
 
     return []
