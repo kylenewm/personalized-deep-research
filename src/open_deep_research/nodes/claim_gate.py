@@ -141,17 +141,19 @@ async def claim_pre_check(state: AgentState, config: RunnableConfig) -> dict:
     # Step 1: Extract claims via LLM
     print("[LAYER3] Extracting key claims from research notes...")
 
+    # Use evaluation model (gpt-4.1-mini by default) for fast, cheap extraction
+    extraction_model = getattr(configurable, 'evaluation_model', 'openai:gpt-4.1-mini')
     model_config = {
-        "model": configurable.planner_model,  # Use fast model
-        "api_key": get_api_key_for_model(configurable.planner_model, config),
+        "model": extraction_model,
+        "api_key": get_api_key_for_model(extraction_model, config),
         "tags": ["langsmith:nostream", "layer3:extract"]
     }
 
     try:
-        extraction_model = configurable_model.with_config(model_config).with_structured_output(ExtractedClaims)
+        extraction_llm = configurable_model.with_config(model_config).with_structured_output(ExtractedClaims)
         prompt = CLAIM_EXTRACTION_PROMPT.format(notes=findings[:20000])
 
-        result = await extraction_model.ainvoke([HumanMessage(content=prompt)])
+        result = await extraction_llm.ainvoke([HumanMessage(content=prompt)])
         claims = result.claims[:20]  # Limit to 20 claims
 
         print(f"[LAYER3] Extracted {len(claims)} claims")
