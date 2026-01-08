@@ -233,12 +233,12 @@ The report should be structured like this:
 </Output Format>
 
 <Citation Rules>
-- Assign each unique URL a single citation number in your text
+- Assign each unique URL a single citation number [N] in your text
 - End with ### Sources that lists each source with corresponding numbers
-- IMPORTANT: Number sources sequentially without gaps (1,2,3,4...) in the final list regardless of which sources you choose
-- Example format:
-  [1] Source Title: URL
-  [2] Source Title: URL
+- IMPORTANT: Number sources sequentially without gaps (1,2,3,4...) in the final list
+- Format sources as numbered markdown links:
+  1. [Source Title](URL)
+  2. [Source Title](URL)
 </Citation Rules>
 
 Critical Reminder: It is extremely important that any information that is even remotely relevant to the user's research topic is preserved verbatim (e.g. don't rewrite it, don't summarize it, don't paraphrase it).
@@ -309,9 +309,9 @@ Write "Evidence limited for [topic]" instead of inventing unsupported claims.
 Please create a detailed answer to the overall research brief that:
 1. Is well-organized with proper headings (# for title, ## for sections, ### for subsections)
 2. Includes specific facts and insights from the research
-3. References relevant sources using [Title](URL) format
+3. Uses inline citation numbers [N] that map to the Sources section
 4. Provides a balanced, thorough analysis. Be as comprehensive as possible, and include all information that is relevant to the overall research question. People are using you for deep research and will expect detailed, comprehensive answers.
-5. Includes a "Sources" section at the end with all referenced links
+5. Includes a "Sources" section at the end formatted as: N. [Title](URL)
 
 You can structure your report in a number of different ways. Here are some examples:
 
@@ -357,14 +357,13 @@ Make sure the final answer report is in the SAME language as the human messages 
 Format the report in clear markdown with proper structure and include source references where appropriate.
 
 <Citation Rules>
-- Assign each unique URL a single citation number in your text
+- Assign each unique URL a single citation number [N] in your text
 - End with ### Sources that lists each source with corresponding numbers
-- IMPORTANT: Number sources sequentially without gaps (1,2,3,4...) in the final list regardless of which sources you choose
-- Each source should be a separate line item in a list, so that in markdown it is rendered as a list.
-- Example format:
-  [1] Source Title: URL
-  [2] Source Title: URL
-- Citations are extremely important. Make sure to include these, and pay a lot of attention to getting these right. Users will often use these citations to look into more information.
+- IMPORTANT: Number sources sequentially without gaps (1,2,3,4...) in the final list
+- Format sources as numbered markdown links (renders as clickable):
+  1. [Source Title](URL)
+  2. [Source Title](URL)
+- Citations are extremely important. Make sure to include these, and pay attention to getting these right.
 </Citation Rules>
 """
 

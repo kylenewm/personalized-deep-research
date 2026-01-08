@@ -145,12 +145,17 @@ class EvalResult:
 def parse_sources_section(report: str) -> Dict[int, Dict]:
     """Parse the Sources section to build citation_num -> source info mapping.
 
-    Expected format:
-    ## Sources
-    [1] Title, Author: https://example.com
-    [2] Another Title: https://example2.com
+    Handles TWO formats:
 
-    Handles titles with colons (e.g., "From Labs to Policy: IMDA's Journey")
+    Format 1 (Markdown links - current report format):
+    ## Sources
+    1. [Title](https://example.com)
+    2. [Another Title](https://example2.com)
+
+    Format 2 (Legacy format):
+    ## Sources
+    [1] Title: https://example.com
+    [2] Another Title: https://example2.com
 
     Returns: {1: {"title": "...", "url": "..."}, 2: {...}}
     """
@@ -163,11 +168,22 @@ def parse_sources_section(report: str) -> Dict[int, Dict]:
 
     sources_text = sources_match.group(1)
 
-    # Parse each citation line: [N] Title...: URL
-    # Use greedy match for title to handle titles with colons
-    # The pattern will match the LAST colon before https://
-    pattern = r'\[(\d+)\]\s*(.+):\s*(https?://[^\s\n]+)'
-    for match in re.finditer(pattern, sources_text):
+    # Try Format 1 first: N. [Title](URL) - markdown links
+    # Pattern: number, dot, optional whitespace, [title], (url)
+    md_pattern = r'(\d+)\.\s*\[([^\]]+)\]\((https?://[^)]+)\)'
+    for match in re.finditer(md_pattern, sources_text):
+        num = int(match.group(1))
+        title = match.group(2).strip()
+        url = match.group(3).strip()
+        citation_map[num] = {"title": title, "url": url}
+
+    # If Format 1 found matches, return them
+    if citation_map:
+        return citation_map
+
+    # Fallback to Format 2: [N] Title: URL - legacy format
+    legacy_pattern = r'\[(\d+)\]\s*(.+):\s*(https?://[^\s\n]+)'
+    for match in re.finditer(legacy_pattern, sources_text):
         num = int(match.group(1))
         title = match.group(2).strip()
         url = match.group(3).strip()
@@ -184,6 +200,10 @@ def extract_citations_from_claim(claim: str, report: str) -> List[int]:
 
     Returns list of citation numbers, e.g., [1, 3] for "...fact [1][3]..."
     """
+    # Handle empty claim
+    if not claim or not claim.strip():
+        return []
+
     # Remove Sources section to avoid false matches
     sources_idx = report.find('## Sources')
     if sources_idx > 0:
@@ -196,27 +216,65 @@ def extract_citations_from_claim(claim: str, report: str) -> List[int]:
     paragraphs = re.split(r'\n\n+|\n-\s+', report_body)
 
     claim_lower = claim.lower()
-    claim_words = set(w.lower() for w in claim.split() if len(w) > 4)
+    # English stopwords from NLTK (v3.8.1)
+    # Source: https://www.nltk.org/nltk_data/ (stopwords corpus)
+    # These are function words with no semantic content for paragraph matching
+    # Using full NLTK list rather than arbitrary subset for reproducibility
+    STOPWORDS = {
+        'i', 'me', 'my', 'myself', 'we', 'our', 'ours', 'ourselves', 'you', 'your',
+        'yours', 'yourself', 'yourselves', 'he', 'him', 'his', 'himself', 'she',
+        'her', 'hers', 'herself', 'it', 'its', 'itself', 'they', 'them', 'their',
+        'theirs', 'themselves', 'what', 'which', 'who', 'whom', 'this', 'that',
+        'these', 'those', 'am', 'is', 'are', 'was', 'were', 'be', 'been', 'being',
+        'have', 'has', 'had', 'having', 'do', 'does', 'did', 'doing', 'a', 'an',
+        'the', 'and', 'but', 'if', 'or', 'because', 'as', 'until', 'while', 'of',
+        'at', 'by', 'for', 'with', 'about', 'against', 'between', 'into', 'through',
+        'during', 'before', 'after', 'above', 'below', 'to', 'from', 'up', 'down',
+        'in', 'out', 'on', 'off', 'over', 'under', 'again', 'further', 'then',
+        'once', 'here', 'there', 'when', 'where', 'why', 'how', 'all', 'each',
+        'few', 'more', 'most', 'other', 'some', 'such', 'no', 'nor', 'not', 'only',
+        'own', 'same', 'so', 'than', 'too', 'very', 's', 't', 'can', 'will', 'just',
+        'don', 'should', 'now', 'd', 'll', 'm', 'o', 're', 've', 'y', 'ain', 'aren',
+        'couldn', 'didn', 'doesn', 'hadn', 'hasn', 'haven', 'isn', 'ma', 'mightn',
+        'mustn', 'needn', 'shan', 'shouldn', 'wasn', 'weren', 'won', 'wouldn'
+    }
+    claim_words = set(w.lower() for w in claim.split() if len(w) > 1 and w.lower() not in STOPWORDS)
 
-    for para in paragraphs:
-        para_lower = para.lower()
+    # Require minimum 2 words to match (avoid matching with nothing)
+    if not claim_words:
+        # Fallback to substring match only
+        pass
+    else:
+        for para in paragraphs:
+            para_lower = para.lower()
 
-        # Check if this paragraph contains enough of the claim's key words
-        word_matches = sum(1 for w in claim_words if w in para_lower)
+            # Check if this paragraph contains enough of the claim's key words
+            word_matches = sum(1 for w in claim_words if w in para_lower)
 
-        if word_matches >= min(5, len(claim_words) * 0.5):
-            # Found a matching paragraph - extract citations from it
-            citations = [int(m) for m in re.findall(r'\[(\d+)\]', para)]
-            if citations:
-                # Limit to reasonable number (paragraph shouldn't have >5 citations)
-                if len(citations) <= 5:
-                    return list(set(citations))
+            # Require at least 2 absolute matches AND 50% of words
+            min_required = max(2, int(len(claim_words) * 0.5))
+            if word_matches >= min_required:
+                # Found a matching paragraph - extract citations from it
+                citations = [int(m) for m in re.findall(r'\[(\d+)\]', para)]
+                if citations:
+                    # Limit to reasonable number (paragraph shouldn't have >5 citations)
+                    if len(citations) <= 5:
+                        return list(set(citations))
 
-    # Strategy 2: Exact substring match
-    if claim[:40] in report_body:
+    # Strategy 2: Exact substring match (for short claims or fallback)
+    if len(claim) >= 10 and claim[:40] in report_body:
         idx = report_body.find(claim[:40])
         # Look for citations within 200 chars after the claim starts
         region = report_body[idx:idx + 300]
+        citations = [int(m) for m in re.findall(r'\[(\d+)\]', region)]
+        if citations and len(citations) <= 5:
+            return list(set(citations))
+
+    # Strategy 3: Fuzzy match for very short claims
+    # Look for exact phrase match of the whole claim
+    if claim_lower in report_body.lower():
+        idx = report_body.lower().find(claim_lower)
+        region = report_body[max(0, idx-50):idx + len(claim) + 100]
         citations = [int(m) for m in re.findall(r'\[(\d+)\]', region)]
         if citations and len(citations) <= 5:
             return list(set(citations))
@@ -267,6 +325,38 @@ def estimate_cost(num_claims: int, num_uncited: int, config: EvalConfig) -> Cost
         verification_calls=verification_calls,
         embedding_calls=embedding_calls,
         estimated_cost_usd=round(estimated_cost, 3)
+    )
+
+
+def calculate_claim_metrics(per_claim_results: List[ClaimResult]) -> ClaimMetrics:
+    """Calculate claim metrics from verification results.
+
+    Hallucination rate = (FALSE + UNCITED) / total
+    - FALSE: proven incorrect claims
+    - UNCITED: claims without citations (trust risk even if true)
+
+    Uses OR logic to prevent double-counting (an uncited FALSE claim counts once).
+    """
+    if not per_claim_results:
+        return ClaimMetrics()
+
+    true_count = sum(1 for r in per_claim_results if r.status == "TRUE")
+    false_count = sum(1 for r in per_claim_results if r.status == "FALSE")
+    unverifiable_count = sum(1 for r in per_claim_results if r.status == "UNVERIFIABLE")
+    uncited_count = sum(1 for r in per_claim_results if r.is_uncited)
+    total = len(per_claim_results)
+
+    # Risky = FALSE OR UNCITED (OR prevents double-counting)
+    risky_claims = sum(1 for r in per_claim_results if r.status == "FALSE" or r.is_uncited)
+
+    return ClaimMetrics(
+        total=total,
+        true_count=true_count,
+        false_count=false_count,
+        unverifiable_count=unverifiable_count,
+        uncited_count=uncited_count,
+        hallucination_rate=risky_claims / total,
+        grounding_rate=true_count / total,
     )
 
 
@@ -614,21 +704,14 @@ async def evaluate_report(
         per_claim_results.extend(batch_results)
         print(f"[EVAL] Verified {len(per_claim_results)}/{len(claims)} claims")
 
-    # Step 3: Aggregate metrics
-    true_count = sum(1 for r in per_claim_results if r.status == "TRUE")
-    false_count = sum(1 for r in per_claim_results if r.status == "FALSE")
-    unverifiable_count = sum(1 for r in per_claim_results if r.status == "UNVERIFIABLE")
-    total = len(per_claim_results)
+    # Step 3: Aggregate metrics (uses extracted function for testability)
+    claim_metrics = calculate_claim_metrics(per_claim_results)
 
-    claim_metrics = ClaimMetrics(
-        total=total,
-        true_count=true_count,
-        false_count=false_count,
-        unverifiable_count=unverifiable_count,
-        uncited_count=uncited_count,
-        hallucination_rate=false_count / total if total > 0 else 0.0,
-        grounding_rate=true_count / total if total > 0 else 0.0,
-    )
+    # Extract values for use in warnings/output below
+    true_count = claim_metrics.true_count
+    false_count = claim_metrics.false_count
+    total = claim_metrics.total
+    uncited_count = claim_metrics.uncited_count
 
     # Citation metrics
     cited_claims = [r for r in per_claim_results if not r.is_uncited]
@@ -644,11 +727,9 @@ async def evaluate_report(
 
     # Warnings
     if claim_metrics.hallucination_rate > 0.02:
-        warnings.append(f"Hallucination rate ({claim_metrics.hallucination_rate:.1%}) exceeds 2% target")
+        warnings.append(f"Hallucination rate ({claim_metrics.hallucination_rate:.1%}) exceeds 2% target (includes {false_count} FALSE + {uncited_count} UNCITED)")
     if claim_metrics.grounding_rate < 0.85:
         warnings.append(f"Grounding rate ({claim_metrics.grounding_rate:.1%}) below 85% target")
-    if uncited_count > 0:
-        warnings.append(f"{uncited_count} uncited factual claims (high-risk)")
 
     # Check Verified Findings
     vf_metrics = check_verified_findings(state) if config.check_verified_findings else VerifiedFindingsMetrics()
@@ -668,7 +749,7 @@ async def evaluate_report(
     # Print summary
     print(f"\n[EVAL] ========== EVALUATION COMPLETE ==========")
     print(f"[EVAL] Claims: {true_count}/{total} TRUE ({claim_metrics.grounding_rate:.0%} grounding)")
-    print(f"[EVAL] Hallucination rate: {claim_metrics.hallucination_rate:.1%} (target: <2%)")
+    print(f"[EVAL] Hallucination rate: {claim_metrics.hallucination_rate:.1%} (FALSE + UNCITED, target: <2%)")
     print(f"[EVAL] Uncited claims: {uncited_count} (high-risk)")
     print(f"[EVAL] Citation accuracy: {citation_metrics.accuracy:.0%}")
     print(f"[EVAL] Actual cost: ~${cost_est.estimated_cost_usd:.2f}")

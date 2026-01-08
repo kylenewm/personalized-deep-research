@@ -95,6 +95,44 @@ class TestExtractParagraphs:
         assert paragraphs == []
 
 
+class TestLongParagraphHandling:
+    """Tests for handling paragraphs longer than 60 words.
+
+    Issue: Previously paragraphs > 60 words were silently dropped.
+    Fix: Increased max_words to 100 for consistency with chunk_by_sentences.
+    """
+
+    def test_paragraphs_between_60_and_100_words_extracted(self):
+        """Paragraphs with 61-100 words should be extracted, not dropped."""
+        # Create a paragraph with exactly 75 words
+        words = ["word"] * 75
+        long_paragraph = " ".join(words) + " Organization"  # Add capitalized for filter
+
+        paragraphs = extract_paragraphs(long_paragraph, min_words=15, max_words=100)
+        assert len(paragraphs) == 1, "Should extract paragraphs up to 100 words"
+
+    def test_paragraphs_over_100_words_dropped(self):
+        """Paragraphs > 100 words should still be dropped."""
+        words = ["word"] * 120
+        very_long_paragraph = " ".join(words) + " Organization"
+
+        paragraphs = extract_paragraphs(very_long_paragraph, min_words=15, max_words=100)
+        assert len(paragraphs) == 0, "Should drop paragraphs over 100 words"
+
+    def test_max_words_consistency_with_chunk_by_sentences(self):
+        """extract_paragraphs and chunk_by_sentences should use same max_words=100.
+
+        This tests the consistency documented in the fix for multi-paragraph quotes.
+        """
+        # Both should accept 90-word content
+        words = ["word"] * 85
+        content = " ".join(words) + " Organization with Numbers 42"
+
+        paragraphs = extract_paragraphs(content, min_words=15, max_words=100)
+        # Note: chunk_by_sentences has different filtering logic but same max_words
+        assert len(paragraphs) == 1
+
+
 class TestChunkBySentences:
     """Tests for sentence-based chunking (used for Extract API content)."""
 

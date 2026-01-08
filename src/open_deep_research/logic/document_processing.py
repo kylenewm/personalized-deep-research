@@ -283,4 +283,4 @@ def extract_passages_from_content(
         from open_deep_research.logic.sanitize import sanitize_for_quotes, extract_paragraphs
 
         clean_text = sanitize_for_quotes(content)
-        return extract_paragraphs(clean_text, min_words=15, max_words=60)
+        return extract_paragraphs(clean_text, min_words=15, max_words=100)

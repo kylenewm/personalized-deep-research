@@ -55,8 +55,9 @@ def extract_key_terms(claim: str) -> List[str]:
     """
     key_terms = []
 
-    # Acronyms and codes (e.g., AEF-1, M-25-22, LITHOS)
-    key_terms.extend(re.findall(r'\b[A-Z][A-Z0-9-]+(?:-\d+)?\b', claim))
+    # Acronyms and codes (e.g., AEF-1, M-25-22, A-1, LITHOS)
+    # Fixed: Now matches single-letter codes like A-1
+    key_terms.extend(re.findall(r'\b[A-Z](?:[A-Z0-9-]*[A-Z0-9]|-\d+)\b', claim))
 
     # Proper nouns (2+ capitalized words like "Digital Trust Centre")
     key_terms.extend(re.findall(r'\b[A-Z][a-z]+(?:\s+[A-Z][a-z]+)+\b', claim))
@@ -64,12 +65,15 @@ def extract_key_terms(claim: str) -> List[str]:
     # Quoted strings
     key_terms.extend(re.findall(r'"([^"]+)"', claim))
 
-    # Percentages and dollar amounts
+    # Percentages - both formats: "40%" and "50 percent"
     key_terms.extend(re.findall(r'\d+(?:\.\d+)?%', claim))
-    key_terms.extend(re.findall(r'\$[\d,]+(?:\s*(?:billion|million))?', claim))
+    key_terms.extend(re.findall(r'\d+(?:\.\d+)?\s+percent', claim, re.IGNORECASE))
+
+    # Dollar amounts - handles $1.2B, $25T, $1,000, $5 billion
+    key_terms.extend(re.findall(r'\$[\d,]+(?:\.\d+)?(?:[BMKT]|\s*(?:billion|million|trillion))?', claim, re.IGNORECASE))
 
     # Deduplicate and filter short terms
-    return list(set(t for t in key_terms if len(t) >= 3))
+    return list(set(t for t in key_terms if len(t) >= 2))
 
 
 def verify_claim_in_sources(
@@ -165,12 +169,15 @@ async def claim_pre_check(state: AgentState, config: RunnableConfig) -> dict:
     # Step 2: Verify each claim against sources
     warnings = []
     verified_count = 0
+    skipped_vague = []
 
     for claim in claims:
         key_terms = extract_key_terms(claim)
 
         if not key_terms:
-            continue  # Skip claims without verifiable terms
+            # Track vague claims that can't be verified (no specific terms)
+            skipped_vague.append(claim[:80])
+            continue
 
         is_verified, reason = verify_claim_in_sources(claim, key_terms, source_store)
 
@@ -179,16 +186,27 @@ async def claim_pre_check(state: AgentState, config: RunnableConfig) -> dict:
         else:
             warnings.append(f"{claim[:80]}... ({reason})")
 
-    # Step 3: Log warnings
+    # Step 3: Log results
     if warnings:
         print(f"[LAYER3] Found {len(warnings)} unverifiable claims:")
         for w in warnings[:5]:
             print(f"[LAYER3]   - {w}")
         if len(warnings) > 5:
             print(f"[LAYER3]   ... and {len(warnings) - 5} more")
-    else:
+
+    if skipped_vague:
+        print(f"[LAYER3] Skipped {len(skipped_vague)} vague claims (no verifiable terms):")
+        for v in skipped_vague[:3]:
+            print(f"[LAYER3]   - {v}...")
+        if len(skipped_vague) > 3:
+            print(f"[LAYER3]   ... and {len(skipped_vague) - 3} more")
+
+    if not warnings and not skipped_vague:
         print(f"[LAYER3] All {verified_count} claims verified against sources")
+    elif not warnings:
+        print(f"[LAYER3] {verified_count} claims verified, {len(skipped_vague)} skipped (vague)")
 
     return {
-        "claim_warnings": warnings
+        "claim_warnings": warnings,
+        "skipped_vague_claims": skipped_vague,
     }

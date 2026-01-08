@@ -60,10 +60,12 @@ async def extract_evidence(state: AgentState, config: RunnableConfig) -> dict:
 
     # Step 2: Get sources - try state first, then LangGraph Store
     sources = state.get("source_store", [])
+    sources_from_fallback = False
 
     if not sources:
         # Fallback to LangGraph Store
         sources = await get_stored_sources(config)
+        sources_from_fallback = bool(sources)
 
     if not sources:
         logging.warning("[EXTRACT] No sources available for extraction.")
@@ -99,7 +101,7 @@ async def extract_evidence(state: AgentState, config: RunnableConfig) -> dict:
             clean_text = sanitize_for_quotes(content)
             if not clean_text:
                 continue
-            passages = extract_paragraphs(clean_text, min_words=15, max_words=60)
+            passages = extract_paragraphs(clean_text, min_words=15, max_words=100)
 
         # Step 3b: Create EvidenceSnippet for each passage
         for passage in passages:
@@ -150,4 +152,10 @@ async def extract_evidence(state: AgentState, config: RunnableConfig) -> dict:
         unique_sources = len(set(s.get("source_id", s.get("url", "")) for s in all_snippets))
         logging.info(f"[EXTRACT] Selected {len(all_snippets)} snippets from {unique_sources} sources")
 
-    return {"evidence_snippets": all_snippets}
+    # If sources were retrieved from fallback, propagate them to state for downstream nodes
+    result = {"evidence_snippets": all_snippets}
+    if sources_from_fallback:
+        result["source_store"] = sources
+        print(f"[EXTRACT] Propagating {len(sources)} sources to state (from Store fallback)")
+
+    return result

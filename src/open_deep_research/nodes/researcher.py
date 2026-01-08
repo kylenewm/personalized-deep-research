@@ -23,6 +23,7 @@ from open_deep_research.prompts import (
 )
 from open_deep_research.state import ResearcherOutputState, ResearcherState
 from open_deep_research.utils import (
+    TRUNCATION_MARKER,
     anthropic_websearch_called,
     get_all_tools,
     get_api_key_for_model,
@@ -223,12 +224,19 @@ def extract_sources_from_tool_messages(messages) -> list:
             url = url.strip()
             if url and url not in seen_urls:
                 seen_urls.add(url)
+                content = summary.strip()
+                max_len = 50000
+                was_truncated = len(content) > max_len
+                if was_truncated:
+                    # Add marker to indicate truncation for visibility
+                    content = content[:max_len - len(TRUNCATION_MARKER)] + TRUNCATION_MARKER
                 sources.append({
                     "url": url,
                     "title": title.strip(),
-                    "content": summary.strip()[:50000],  # Limit content size
+                    "content": content,
                     "extraction_method": "search_parsed",
-                    "timestamp": datetime.now().isoformat()
+                    "timestamp": datetime.now().isoformat(),
+                    "was_truncated": was_truncated,
                 })
 
     return sources

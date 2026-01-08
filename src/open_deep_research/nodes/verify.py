@@ -14,7 +14,7 @@ from langchain_core.runnables import RunnableConfig
 from open_deep_research.configuration import Configuration
 from open_deep_research.logic.sanitize import sanitize_for_quotes
 from open_deep_research.state import AgentState, EvidenceSnippet
-from open_deep_research.utils import get_stored_sources
+from open_deep_research.utils import TRUNCATION_MARKER, get_stored_sources
 
 
 ##########################
@@ -22,7 +22,12 @@ from open_deep_research.utils import get_stored_sources
 ##########################
 
 def tokenize(text: str) -> Set[str]:
-    """Tokenize text into a set of lowercase words.
+    """Tokenize text into a set of lowercase words, preserving acronyms and codes.
+
+    Handles special patterns that should stay together:
+    - Acronyms with periods: U.S.A., N.A.S.A.
+    - Hyphenated codes: NIST-SP-800-53, AEF-1, M-25-22
+    - Dollar amounts: $1.2B, $25T
 
     Args:
         text: Input text to tokenize
@@ -30,9 +35,27 @@ def tokenize(text: str) -> Set[str]:
     Returns:
         Set of lowercase word tokens
     """
-    # Split on whitespace and punctuation, lowercase, filter empty
+    # First, extract and preserve special patterns that should stay together
+    preserved = []
+
+    # Hyphenated codes (e.g., NIST-SP-800-53, AEF-1)
+    preserved.extend(re.findall(r'\b[A-Za-z0-9]+(?:-[A-Za-z0-9]+)+\b', text))
+
+    # Acronyms with periods (e.g., U.S.A., N.A.S.A.)
+    preserved.extend(re.findall(r'\b(?:[A-Za-z]\.){2,}[A-Za-z]?', text))
+
+    # Dollar amounts (e.g., $1.2B, $25T, $1,000)
+    preserved.extend(re.findall(r'\$[\d,]+(?:\.\d+)?(?:[BMKT])?', text, re.IGNORECASE))
+
+    # Standard word tokenization for everything else
     words = re.findall(r'\b\w+\b', text.lower())
-    return set(words)
+
+    # Combine: preserved tokens (lowercased) + regular words
+    all_tokens = set(words)
+    for token in preserved:
+        all_tokens.add(token.lower())
+
+    return all_tokens
 
 
 def jaccard_similarity(text1: str, text2: str) -> float:
@@ -143,8 +166,18 @@ async def verify_evidence(state: AgentState, config: RunnableConfig) -> dict:
     """
     # Step 1: Check if verification is disabled
     if state.get("verified_disabled", False):
-        logging.info("[VERIFY_EVIDENCE] Verification disabled, skipping.")
+        logging.info("[VERIFY_EVIDENCE] Verification disabled, marking snippets as SKIP.")
         print("[VERIFY_EVIDENCE] ⚠️ Skipping (verification disabled)")
+        # Mark all snippets as SKIP instead of leaving them PENDING
+        snippets = state.get("evidence_snippets", [])
+        if snippets:
+            skipped_snippets = [{**s, "status": "SKIP"} for s in snippets]
+            return {
+                "evidence_snippets": {
+                    "type": "override",
+                    "value": skipped_snippets
+                }
+            }
         return {}
 
     # Step 2: Get evidence snippets
@@ -251,10 +284,19 @@ async def verify_claims(state: AgentState, config: RunnableConfig):
             # Parse sources from formatted output: --- SOURCE N: TITLE ---\nURL: url\n\nSUMMARY:\ncontent
             source_pattern = r'--- SOURCE \d+: (.+?) ---\nURL: (.+?)\n\n(?:SUMMARY:\n)?(.+?)(?=--- SOURCE|\Z)'
             matches = re.findall(source_pattern, raw_notes_str, re.DOTALL)
-            sources = [
-                {"title": title.strip(), "url": url.strip(), "content": content.strip()[:5000]}
-                for title, url, content in matches
-            ]
+            sources = []
+            max_len = 5000
+            for title, url, content in matches:
+                content_stripped = content.strip()
+                was_truncated = len(content_stripped) > max_len
+                if was_truncated:
+                    content_stripped = content_stripped[:max_len - len(TRUNCATION_MARKER)] + TRUNCATION_MARKER
+                sources.append({
+                    "title": title.strip(),
+                    "url": url.strip(),
+                    "content": content_stripped,
+                    "was_truncated": was_truncated,
+                })
             if sources:
                 print(f"[VERIFY] Parsed {len(sources)} sources from raw_notes")
 

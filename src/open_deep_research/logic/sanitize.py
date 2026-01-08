@@ -90,18 +90,18 @@ def sanitize_for_quotes(html: str) -> str:
     return text
 
 
-def extract_paragraphs(clean_text: str, min_words: int = 15, max_words: int = 60) -> List[str]:
+def extract_paragraphs(clean_text: str, min_words: int = 15, max_words: int = 100) -> List[str]:
     """Extract paragraphs that meet word count criteria.
 
     Per TRUST_ARCH.md Section B:
     - Split by \\n\\n
-    - Filter paragraphs: Length 15 to 60 words
+    - Filter paragraphs: Length 15 to 100 words
     - Content: Must contain at least one noun phrase or number (simple heuristic)
 
     Args:
         clean_text: Sanitized text from sanitize_for_quotes()
         min_words: Minimum word count (default 15)
-        max_words: Maximum word count (default 60)
+        max_words: Maximum word count (default 100)
 
     Returns:
         List of paragraph strings meeting the criteria

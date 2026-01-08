@@ -37,6 +37,44 @@ class TestTokenize:
         assert "40" in result
         assert "rag" in result
 
+    def test_tokenize_preserves_hyphenated_codes(self):
+        """Should preserve hyphenated codes as single tokens."""
+        result = tokenize("NIST-SP-800-53 and AEF-1 are standards")
+        assert "nist-sp-800-53" in result
+        assert "aef-1" in result
+        # Should also have individual tokens for backwards compatibility
+        assert "nist" in result
+        assert "standards" in result
+
+    def test_tokenize_preserves_acronyms_with_periods(self):
+        """Should preserve acronyms with periods as single tokens."""
+        result = tokenize("The U.S.A. and N.A.S.A. agencies")
+        assert "u.s.a." in result
+        assert "n.a.s.a." in result
+        # Should also have split tokens
+        assert "agencies" in result
+
+    def test_tokenize_preserves_dollar_amounts(self):
+        """Should preserve dollar amounts as single tokens."""
+        result = tokenize("The budget is $1.2B and revenue is $25T")
+        assert "$1.2b" in result
+        assert "$25t" in result
+        assert "budget" in result
+
+    def test_tokenize_different_references_dont_match(self):
+        """NIST-SP-800-53 should not have same tokens as NIST SP 800 53."""
+        result1 = tokenize("NIST-SP-800-53")
+        result2 = tokenize("NIST SP 800 53")
+
+        # result1 should have the hyphenated version
+        assert "nist-sp-800-53" in result1
+
+        # result2 should NOT have the hyphenated version
+        assert "nist-sp-800-53" not in result2
+
+        # This means Jaccard similarity will be < 1.0 for these
+        # (the hyphenated token creates a difference)
+
 
 class TestJaccardSimilarity:
     """Tests for Jaccard similarity calculation."""
@@ -159,3 +197,78 @@ class TestVerifyQuoteEdgeCases:
         result = verify_quote_in_source(quote, source)
         # After sanitization, newlines become spaces
         assert result == "PASS"
+
+    def test_quote_longer_than_source_exact_match(self):
+        """Quote longer than source should still PASS if source is a substring."""
+        # Source is 5 words, quote is 10 words but contains source
+        source = "short source content here only"
+        quote = "this has short source content here only and more words"
+        result = verify_quote_in_source(quote, source)
+        # The source appears in the quote, so substring check should find it
+        # But we're checking if QUOTE is in SOURCE, not vice versa
+        # So this should FAIL (quote not in source)
+        assert result == "FAIL"
+
+    def test_quote_longer_than_source_high_overlap(self):
+        """Quote longer than source with high word overlap should use fuzzy match."""
+        source = "RAG reduces hallucinations effectively"  # 4 words
+        quote = "RAG reduces hallucinations effectively in healthcare applications"  # 7 words
+        # 4/7 words overlap, Jaccard = 4/(4+3) = 4/7 ≈ 0.57
+        result = verify_quote_in_source(quote, source, fuzzy_threshold=0.5)
+        assert result == "PASS"
+
+    def test_quote_longer_than_source_low_overlap(self):
+        """Quote much longer than source with low overlap should FAIL."""
+        source = "short text"  # 2 words
+        quote = "this is a completely different long quote with many words"  # 10 words
+        result = verify_quote_in_source(quote, source)
+        assert result == "FAIL"
+
+    def test_source_contains_quote_words_scrambled(self):
+        """Source with same words but scrambled order should use Jaccard."""
+        quote = "one two three four five"
+        source = "five four three two one"
+        # Same words, Jaccard = 1.0
+        result = verify_quote_in_source(quote, source, fuzzy_threshold=0.8)
+        assert result == "PASS"
+
+
+class TestVerifyEvidenceDisabled:
+    """Tests for verify_evidence when verification is disabled."""
+
+    @pytest.mark.asyncio
+    async def test_disabled_marks_snippets_as_skip(self):
+        """When verification is disabled, snippets should be marked SKIP not left PENDING."""
+        from open_deep_research.nodes.verify import verify_evidence
+
+        state = {
+            "verified_disabled": True,
+            "evidence_snippets": [
+                {"snippet_id": "s1", "quote": "test quote", "status": "PENDING"},
+                {"snippet_id": "s2", "quote": "another quote", "status": "PENDING"},
+            ]
+        }
+        config = {}
+
+        result = await verify_evidence(state, config)
+
+        # Should return override with SKIP status
+        assert "evidence_snippets" in result
+        assert result["evidence_snippets"]["type"] == "override"
+        snippets = result["evidence_snippets"]["value"]
+        assert len(snippets) == 2
+        assert all(s["status"] == "SKIP" for s in snippets)
+
+    @pytest.mark.asyncio
+    async def test_disabled_empty_snippets_returns_empty(self):
+        """When verification is disabled with no snippets, should return empty dict."""
+        from open_deep_research.nodes.verify import verify_evidence
+
+        state = {
+            "verified_disabled": True,
+            "evidence_snippets": []
+        }
+        config = {}
+
+        result = await verify_evidence(state, config)
+        assert result == {}

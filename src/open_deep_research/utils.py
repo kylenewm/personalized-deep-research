@@ -45,6 +45,10 @@ from open_deep_research.state import ResearchComplete, Summary, SourceRecord, Br
 # This allows Extract API sources to propagate through state locally
 _source_cache: Dict[str, List[dict]] = {}
 
+# Truncation marker for visibility when content is cut off
+# Used across the pipeline to indicate data loss
+TRUNCATION_MARKER = "\n\n[...CONTENT TRUNCATED...]"
+
 
 def get_source_store_key(config: RunnableConfig) -> str:
     """Generate unique key for source storage per thread."""
@@ -89,9 +93,13 @@ async def store_source_records(
         config: Runtime config containing thread_id
         max_content_length: Max chars to store per source (default 50k)
     """
-    # Truncate content before caching
+    # Truncate content before caching (with marker if truncated)
+    # Uses module-level TRUNCATION_MARKER constant
     for record in records:
-        record["content"] = record.get("content", "")[:max_content_length]
+        content = record.get("content", "")
+        if len(content) > max_content_length:
+            record["content"] = content[:max_content_length - len(TRUNCATION_MARKER)] + TRUNCATION_MARKER
+            record["was_truncated"] = True
         if "timestamp" not in record:
             record["timestamp"] = datetime.now().isoformat()
 
@@ -113,12 +121,11 @@ async def store_source_records(
         existing = []
     
     # Add new sources (dedupe by URL)
+    # Note: Content already truncated with marker in cache step above
     existing_urls = {s.get("url") for s in existing}
     new_records = []
     for record in records:
         if record.get("url") not in existing_urls:
-            # Truncate content to max length
-            record["content"] = record.get("content", "")[:max_content_length]
             record["timestamp"] = datetime.now().isoformat()
             new_records.append(record)
             existing_urls.add(record.get("url"))

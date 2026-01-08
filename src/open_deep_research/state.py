@@ -214,3 +214,16 @@ class ResearcherOutputState(BaseModel):
     compressed_research: str
     raw_notes: Annotated[list[str], override_reducer] = []
     source_store: list = []  # Sources collected during research
+
+
+class SupervisorOutputState(TypedDict):
+    """Output state from supervisor subgraph.
+
+    This explicitly defines which fields get mapped back to the parent AgentState
+    when the supervisor subgraph completes. Without this, source_store was not
+    being properly transferred to the parent graph.
+    """
+    notes: Annotated[list[str], override_reducer]
+    raw_notes: Annotated[list[str], override_reducer]
+    source_store: Annotated[list[SourceRecord], override_reducer]
+    research_brief: str

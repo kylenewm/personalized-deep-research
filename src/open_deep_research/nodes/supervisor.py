@@ -11,7 +11,7 @@ from langgraph.types import Command
 from open_deep_research.configuration import Configuration
 from open_deep_research.models import configurable_model
 from open_deep_research.nodes.researcher import researcher_subgraph
-from open_deep_research.state import ConductResearch, ResearchComplete, SupervisorState
+from open_deep_research.state import ConductResearch, ResearchComplete, SupervisorState, SupervisorOutputState
 from open_deep_research.utils import (
     get_api_key_for_model,
     get_notes_from_tool_calls,
@@ -276,7 +276,8 @@ async def supervisor_tools(state: SupervisorState, config: RunnableConfig) -> Co
 
 # Supervisor Subgraph Construction
 # Creates the supervisor workflow that manages research delegation and coordination
-supervisor_builder = StateGraph(SupervisorState, config_schema=Configuration)
+# NOTE: output=SupervisorOutputState ensures source_store gets mapped back to parent AgentState
+supervisor_builder = StateGraph(SupervisorState, output=SupervisorOutputState, config_schema=Configuration)
 
 # Add supervisor nodes for research management
 supervisor_builder.add_node("supervisor", supervisor)           # Main supervisor logic
