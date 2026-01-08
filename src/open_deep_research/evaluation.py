@@ -94,6 +94,61 @@ class VerifiedFindingsMetrics:
 
 
 @dataclass
+class CitationValidityResult:
+    """Result for a single citation verification (deterministic approach).
+
+    This is used by the citation-first evaluation which parses [N] citations
+    directly from the report, avoiding LLM extraction paraphrasing issues.
+    """
+    citation_num: int
+    context: str  # The sentence/clause containing the citation
+    status: str  # "VALID", "INVALID", "MISSING_SOURCE", "NO_CONTENT"
+    source_url: Optional[str] = None
+    confidence: float = 0.0
+    evidence_snippet: Optional[str] = None
+
+
+@dataclass
+class CitationValidityMetrics:
+    """Aggregate metrics for citation validity evaluation."""
+    total_citations: int = 0
+    unique_citations: int = 0  # Unique [N] numbers used
+    valid_count: int = 0
+    invalid_count: int = 0
+    missing_source_count: int = 0
+    no_content_count: int = 0
+    validity_rate: float = 0.0  # valid / (valid + invalid)
+    error_rate: float = 0.0  # invalid / total
+
+    def __str__(self):
+        return (f"Citation Validity: {self.valid_count}/{self.valid_count + self.invalid_count} "
+                f"({self.validity_rate:.1%})\n"
+                f"Errors: {self.invalid_count} invalid, {self.missing_source_count} missing sources")
+
+
+@dataclass
+class CoverageResult:
+    """Citation coverage metrics (separate from validity).
+
+    This measures what percentage of sentences have citations,
+    NOT whether those citations are valid. This is a quality metric.
+    """
+    total_sentences: int = 0
+    cited_sentences: int = 0
+    uncited_factual: List[str] = None  # Sentences without citations that look factual
+    coverage_rate: float = 0.0
+
+    def __post_init__(self):
+        if self.uncited_factual is None:
+            self.uncited_factual = []
+
+    def __str__(self):
+        return (f"Coverage: {self.cited_sentences}/{self.total_sentences} sentences cited "
+                f"({self.coverage_rate:.1%})\n"
+                f"Uncited factual: {len(self.uncited_factual)} statements")
+
+
+@dataclass
 class CostEstimate:
     """Cost estimate for evaluation."""
     extraction_calls: int = 1
@@ -303,6 +358,369 @@ def find_source_by_url(url: str, sources: List[SourceRecord]) -> Optional[Source
 
     # Return the source with the longest content (prefer full over truncated)
     return max(matches, key=lambda s: len(s.get("content", "")))
+
+
+# =============================================================================
+# CITATION-FIRST EVALUATION (Deterministic Approach)
+# =============================================================================
+# These functions implement a deterministic evaluation approach that:
+# 1. Parses [N] citations directly from the report (no LLM extraction)
+# 2. Verifies each citation against its corresponding source
+# 3. Separates validity (are citations correct?) from coverage (do we cite enough?)
+
+
+def extract_citation_context(report: str, citation_pos: int, context_chars: int = 200) -> str:
+    """Extract the sentence/clause containing a citation.
+
+    Args:
+        report: Full report text
+        citation_pos: Position of the '[' in the citation [N]
+        context_chars: How many chars before/after to consider
+
+    Returns:
+        The sentence or clause containing the citation
+    """
+    # Get surrounding context
+    start = max(0, citation_pos - context_chars)
+    end = min(len(report), citation_pos + context_chars)
+    context = report[start:end]
+
+    # Find sentence boundaries within context
+    # Look for sentence-ending punctuation followed by space/newline
+    sentences = re.split(r'(?<=[.!?])\s+', context)
+
+    # Find which sentence contains our citation
+    rel_pos = citation_pos - start
+    char_count = 0
+    for sent in sentences:
+        if char_count <= rel_pos < char_count + len(sent) + 1:
+            # Clean up the sentence
+            sent = sent.strip()
+            # Remove the citation markers for cleaner context
+            sent_clean = re.sub(r'\[\d+\]', '', sent).strip()
+            # Skip if this is a header line
+            if sent_clean.startswith('#'):
+                continue
+            return sent_clean if sent_clean else sent
+        char_count += len(sent) + 1  # +1 for the split character
+
+    # Fallback: return the whole context cleaned up, without headers
+    context_clean = re.sub(r'\[\d+\]', '', context).strip()
+    # Remove header lines from context
+    lines = context_clean.split('\n')
+    non_header_lines = [l for l in lines if not l.strip().startswith('#')]
+    return ' '.join(non_header_lines).strip()
+
+
+def verify_text_against_source(text: str, source: SourceRecord) -> Tuple[str, float, str]:
+    """Deterministically verify if source content supports the text.
+
+    Uses substring and keyword matching (no LLM) for fast verification.
+
+    Args:
+        text: The text/claim to verify
+        source: Source record with 'content' field
+
+    Returns:
+        Tuple of (status, confidence, evidence_snippet)
+        status: "VALID", "INVALID", or "NO_CONTENT"
+    """
+    content = source.get("content", "")
+    if not content:
+        return "NO_CONTENT", 0.0, ""
+
+    content_lower = content.lower()
+    text_lower = text.lower()
+
+    # Strategy 1: Direct substring match (high confidence)
+    if text_lower in content_lower:
+        # Find the matching snippet
+        idx = content_lower.find(text_lower)
+        snippet = content[max(0, idx-50):idx + len(text) + 50]
+        return "VALID", 1.0, snippet.strip()
+
+    # Strategy 2: Keyword overlap (medium confidence)
+    # Extract meaningful words from text (>3 chars, not stopwords)
+    STOPWORDS = {'the', 'and', 'for', 'are', 'but', 'not', 'you', 'all', 'can',
+                 'had', 'her', 'was', 'one', 'our', 'out', 'has', 'have', 'been',
+                 'were', 'they', 'this', 'that', 'with', 'from', 'will', 'what'}
+    text_words = set(w.lower() for w in re.findall(r'\b\w+\b', text)
+                     if len(w) > 3 and w.lower() not in STOPWORDS)
+
+    if not text_words:
+        # Very short text, can't verify
+        return "INVALID", 0.0, ""
+
+    # Count how many key words appear in source
+    matches = sum(1 for w in text_words if w in content_lower)
+    overlap_ratio = matches / len(text_words)
+
+    if overlap_ratio >= 0.6:  # 60% keyword overlap threshold
+        # Find a relevant snippet containing most matches
+        paragraphs = content.split('\n\n')
+        best_para = ""
+        best_score = 0
+        for para in paragraphs:
+            para_lower = para.lower()
+            score = sum(1 for w in text_words if w in para_lower)
+            if score > best_score:
+                best_score = score
+                best_para = para
+
+        return "VALID", overlap_ratio, best_para[:300].strip()
+
+    return "INVALID", overlap_ratio, ""
+
+
+def evaluate_citation_validity(
+    report: str,
+    sources: List[SourceRecord],
+    citation_map: Optional[Dict[int, Dict]] = None
+) -> Tuple[List[CitationValidityResult], CitationValidityMetrics]:
+    """Evaluate validity of all [N] citations in the report.
+
+    DETERMINISTIC: Same input → same output every time.
+
+    This is the core of the citation-first approach:
+    1. Parse all [N] citations from report body
+    2. Extract the text context around each citation
+    3. Verify that source N supports the context
+
+    Args:
+        report: Full report text
+        sources: List of source records from source_store
+        citation_map: Optional pre-parsed {N: {"url": ..., "title": ...}} mapping
+
+    Returns:
+        Tuple of (per-citation results, aggregate metrics)
+    """
+    results = []
+
+    # Parse citation map if not provided
+    if citation_map is None:
+        citation_map = parse_sources_section(report)
+
+    # Find report body (before Sources section)
+    sources_idx = report.find("## Sources")
+    if sources_idx == -1:
+        sources_idx = report.find("### Sources")
+    report_body = report[:sources_idx] if sources_idx != -1 else report
+
+    # Track unique citations and their occurrences
+    citation_occurrences = {}  # {N: [(pos, context), ...]}
+
+    # Find all [N] references in report body
+    for match in re.finditer(r'\[(\d+)\]', report_body):
+        citation_num = int(match.group(1))
+        pos = match.start()
+        context = extract_citation_context(report_body, pos)
+
+        if citation_num not in citation_occurrences:
+            citation_occurrences[citation_num] = []
+        citation_occurrences[citation_num].append((pos, context))
+
+    # Verify each unique citation
+    for citation_num, occurrences in sorted(citation_occurrences.items()):
+        # Use the first occurrence for verification (they should all cite the same source)
+        _, context = occurrences[0]
+
+        # Get source info from citation map
+        source_info = citation_map.get(citation_num)
+        if not source_info:
+            results.append(CitationValidityResult(
+                citation_num=citation_num,
+                context=context,
+                status="MISSING_SOURCE",
+                source_url=None,
+                confidence=0.0,
+                evidence_snippet=None
+            ))
+            continue
+
+        source_url = source_info.get("url", "")
+
+        # Find the actual source content
+        source = find_source_by_url(source_url, sources)
+        if not source or not source.get("content"):
+            results.append(CitationValidityResult(
+                citation_num=citation_num,
+                context=context,
+                status="NO_CONTENT",
+                source_url=source_url,
+                confidence=0.0,
+                evidence_snippet=None
+            ))
+            continue
+
+        # Verify the context against the source
+        status, confidence, evidence = verify_text_against_source(context, source)
+
+        results.append(CitationValidityResult(
+            citation_num=citation_num,
+            context=context,
+            status=status,
+            source_url=source_url,
+            confidence=confidence,
+            evidence_snippet=evidence
+        ))
+
+    # Calculate metrics
+    total = len(results)
+    valid = sum(1 for r in results if r.status == "VALID")
+    invalid = sum(1 for r in results if r.status == "INVALID")
+    missing = sum(1 for r in results if r.status == "MISSING_SOURCE")
+    no_content = sum(1 for r in results if r.status == "NO_CONTENT")
+
+    # Validity rate excludes missing/no_content (not the report's fault)
+    verifiable = valid + invalid
+    validity_rate = valid / verifiable if verifiable > 0 else 0.0
+    error_rate = invalid / total if total > 0 else 0.0
+
+    metrics = CitationValidityMetrics(
+        total_citations=sum(len(occs) for occs in citation_occurrences.values()),
+        unique_citations=len(citation_occurrences),
+        valid_count=valid,
+        invalid_count=invalid,
+        missing_source_count=missing,
+        no_content_count=no_content,
+        validity_rate=validity_rate,
+        error_rate=error_rate
+    )
+
+    return results, metrics
+
+
+def split_into_sentences(report: str) -> List[str]:
+    """Split report into sentences, excluding headers and metadata.
+
+    Returns only content sentences, not headers, list items, or source listings.
+    """
+    # Find report body (before Sources section)
+    sources_idx = report.find("## Sources")
+    if sources_idx == -1:
+        sources_idx = report.find("### Sources")
+    report_body = report[:sources_idx] if sources_idx != -1 else report
+
+    sentences = []
+
+    # Split into paragraphs first
+    paragraphs = report_body.split('\n\n')
+
+    for para in paragraphs:
+        para = para.strip()
+
+        # Skip headers
+        if para.startswith('#'):
+            continue
+
+        # Skip empty paragraphs
+        if not para:
+            continue
+
+        # Skip horizontal rules
+        if para.startswith('---'):
+            continue
+
+        # For list items, extract the text after the bullet
+        if para.startswith('* ') or para.startswith('- '):
+            # Could be a Verified Findings bullet or regular list
+            text = para[2:].strip()
+            if text:
+                sentences.append(text)
+            continue
+
+        # Regular paragraph - split into sentences
+        # Handle abbreviations to avoid false splits
+        para_processed = para.replace('e.g.', 'eg').replace('i.e.', 'ie')
+        para_processed = para_processed.replace('U.S.', 'US').replace('etc.', 'etc')
+
+        sent_list = re.split(r'(?<=[.!?])\s+', para_processed)
+        for sent in sent_list:
+            sent = sent.strip()
+            if len(sent) > 10:  # Skip very short fragments
+                sentences.append(sent)
+
+    return sentences
+
+
+def is_factual_sentence(sentence: str) -> bool:
+    """Determine if a sentence contains factual content that should be cited.
+
+    Returns True if sentence contains:
+    - Numbers, percentages, dollar amounts
+    - Specific dates or years
+    - Acronyms or proper nouns
+    - Quoted text
+    - Comparative claims (more, less, best, worst)
+
+    Returns False for:
+    - Meta-commentary ("This section discusses...")
+    - Vague statements ("Some experts believe...")
+    - Simple definitions or explanations
+    """
+    # Numbers, percentages, money
+    if re.search(r'\d+\.?\d*%', sentence):
+        return True
+    if re.search(r'\$[\d,]+', sentence):
+        return True
+    if re.search(r'\b\d{4}\b', sentence):  # Year
+        return True
+    if re.search(r'\b\d+\s*(billion|million|trillion|thousand)\b', sentence, re.I):
+        return True
+
+    # Acronyms (2+ capital letters together)
+    if re.search(r'\b[A-Z]{2,}\b', sentence):
+        return True
+
+    # Quoted text suggests specific claims
+    if '"' in sentence or '"' in sentence:
+        return True
+
+    # Comparative claims
+    if re.search(r'\b(more|less|best|worst|highest|lowest|largest|smallest)\b', sentence, re.I):
+        return True
+
+    # Specific verbs that suggest factual claims
+    if re.search(r'\b(reduces?|increases?|improves?|prevents?|causes?|enables?)\b', sentence, re.I):
+        return True
+
+    return False
+
+
+def calculate_citation_coverage(report: str) -> CoverageResult:
+    """Calculate what percentage of factual sentences have citations.
+
+    This is a QUALITY metric, separate from validity.
+    - High coverage = most statements are cited
+    - Low coverage = many uncited statements (may need more sources)
+
+    Args:
+        report: Full report text
+
+    Returns:
+        CoverageResult with coverage statistics
+    """
+    sentences = split_into_sentences(report)
+
+    if not sentences:
+        return CoverageResult()
+
+    cited_count = 0
+    uncited_factual = []
+
+    for sent in sentences:
+        if re.search(r'\[\d+\]', sent):
+            cited_count += 1
+        elif is_factual_sentence(sent):
+            # This is a factual-looking sentence without citations
+            uncited_factual.append(sent[:100])  # Truncate for display
+
+    return CoverageResult(
+        total_sentences=len(sentences),
+        cited_sentences=cited_count,
+        uncited_factual=uncited_factual,
+        coverage_rate=cited_count / len(sentences) if sentences else 0.0
+    )
 
 
 def estimate_cost(num_claims: int, num_uncited: int, config: EvalConfig) -> CostEstimate:
@@ -636,6 +1054,44 @@ async def evaluate_report(
     citation_map = parse_sources_section(report)
     print(f"[EVAL] Parsed {len(citation_map)} citations from Sources section")
 
+    # ==========================================================================
+    # CITATION-FIRST EVALUATION (Deterministic)
+    # ==========================================================================
+    # These metrics are computed WITHOUT LLM calls - fast and deterministic
+    print(f"\n[EVAL] === CITATION-FIRST METRICS (Deterministic) ===")
+
+    # 1. Citation Validity: Are our citations supported by their sources?
+    validity_results, validity_metrics = evaluate_citation_validity(
+        report, sources, citation_map
+    )
+    print(f"[EVAL] Citation Validity: {validity_metrics.valid_count}/{validity_metrics.unique_citations} "
+          f"unique citations verified ({validity_metrics.validity_rate:.0%})")
+
+    if validity_metrics.invalid_count > 0:
+        print(f"[EVAL] ⚠️ {validity_metrics.invalid_count} citations could not be verified against sources")
+        for r in validity_results:
+            if r.status == "INVALID":
+                print(f"[EVAL]   - [{r.citation_num}] {r.context[:60]}...")
+
+    if validity_metrics.missing_source_count > 0:
+        print(f"[EVAL] ⚠️ {validity_metrics.missing_source_count} citations reference missing sources")
+
+    if validity_metrics.no_content_count > 0:
+        print(f"[EVAL] ⚠️ {validity_metrics.no_content_count} sources have no content to verify against")
+
+    # 2. Citation Coverage: What % of sentences have citations?
+    coverage = calculate_citation_coverage(report)
+    print(f"[EVAL] Citation Coverage: {coverage.cited_sentences}/{coverage.total_sentences} "
+          f"sentences cited ({coverage.coverage_rate:.0%})")
+
+    if coverage.uncited_factual:
+        print(f"[EVAL] ⚠️ {len(coverage.uncited_factual)} factual statements without citations:")
+        for stmt in coverage.uncited_factual[:3]:  # Show first 3
+            print(f"[EVAL]   - \"{stmt[:70]}...\"")
+
+    print(f"[EVAL] ==============================================\n")
+    # ==========================================================================
+
     # Initialize LLM
     import os
     api_key = os.environ.get("OPENAI_API_KEY")
@@ -749,16 +1205,25 @@ async def evaluate_report(
     )
 
     # Print summary
-    print(f"\n[EVAL] ========== EVALUATION COMPLETE ==========")
+    print(f"\n[EVAL] =============== EVALUATION COMPLETE ===============")
+    print(f"[EVAL]")
+    print(f"[EVAL] --- CITATION-FIRST METRICS (Deterministic) ---")
+    print(f"[EVAL] Citation Validity: {validity_metrics.validity_rate:.0%} ({validity_metrics.valid_count}/{validity_metrics.unique_citations} citations verified)")
+    print(f"[EVAL] Citation Coverage: {coverage.coverage_rate:.0%} ({coverage.cited_sentences}/{coverage.total_sentences} sentences cited)")
+    if coverage.uncited_factual:
+        print(f"[EVAL] Uncited Factual Statements: {len(coverage.uncited_factual)}")
+    print(f"[EVAL]")
+    print(f"[EVAL] --- LLM-BASED METRICS (Legacy) ---")
     print(f"[EVAL] Claims: {true_count}/{total} TRUE ({claim_metrics.grounding_rate:.0%} grounding)")
     print(f"[EVAL] Hallucination rate: {claim_metrics.hallucination_rate:.1%} (FALSE + UNCITED, target: <2%)")
     print(f"[EVAL] Uncited claims: {uncited_count} (high-risk)")
     print(f"[EVAL] Citation accuracy: {citation_metrics.accuracy:.0%}")
-    print(f"[EVAL] Actual cost: ~${cost_est.estimated_cost_usd:.2f}")
+    print(f"[EVAL]")
+    print(f"[EVAL] Cost: ~${cost_est.estimated_cost_usd:.2f}")
     if warnings:
         print(f"[EVAL] Warnings ({len(warnings)}):")
         for w in warnings:
             print(f"[EVAL]   - {w}")
-    print(f"[EVAL] ============================================\n")
+    print(f"[EVAL] ======================================================\n")
 
     return result
