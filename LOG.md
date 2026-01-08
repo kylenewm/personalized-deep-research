@@ -488,3 +488,56 @@ All issues from the 41-issue trust audit have been addressed:
 - **Actionable:** Know exactly which citations failed and why
 - **F500-ready:** "95% citation validity" is meaningful to customers
 - **Separates concerns:** Validity (correctness) vs Coverage (completeness) are different questions
+
+---
+
+## 2026-01-08 (continued)
+
+### Architectural Insight: Safeguarded Generation
+
+**Context:** Discussion about why citation-first evaluation doesn't FIX the problem, only measures it better. The real issue is LLMs synthesize/add content during report generation.
+
+**Key Insight from User:** LLMs can still hallucinate even with constrained input. Need structural enforcement, not just prompts.
+
+**Proposed Architecture: Locked Facts + Filler Generation**
+
+```
+1. LLM arranges citations (decides order/placement of verified facts)
+2. The actual cited text is LOCKED/IMMUTABLE (safeguarded)
+3. LLM writes filler AROUND the locked pieces only
+4. Synthesis section is explicitly marked "not verified"
+```
+
+**Report Structure:**
+
+```
+## Verified Findings
+[LOCKED - immutable quotes with sources, already verified]
+
+## Body Sections
+[LOCKED FACT 1] → filler → [LOCKED FACT 2] → filler → [LOCKED FACT 3]
+(LLM can only INSERT between locked facts, not modify them)
+
+## Synthesis (AI Interpretation)  
+[Clearly marked as not 100% verified - user accepts this]
+```
+
+**Why This Works:**
+
+1. **Dangerous content (factual claims) is locked** - LLM physically can't change verified quotes
+2. **Harmless content (transitions) is generated** - "This leads to...", "Additionally..." 
+3. **If filler is wrong, it's awkward writing, not hallucination**
+4. **Synthesis is explicitly marked** - user knows it's not 100%
+
+**Implementation Approach:**
+
+- Pass verified facts as immutable tokens/strings
+- LLM only INSERTs text between them (fill-in-the-blank)
+- Template structure: `{FACT_1} {FILLER} {FACT_2} {FILLER} {FACT_3}`
+- Post-processing validates locked content wasn't modified
+
+**This is structural enforcement, not prompting.**
+
+**Trade-off:** Reports may read more robotic. But they'll be accurate where it matters.
+
+**Status:** Idea captured. Not yet implemented.

@@ -61,6 +61,23 @@ Added deterministic metrics that don't rely on LLM claim extraction:
 
 These metrics are DETERMINISTIC (same input → same output) and separate validity from coverage.
 
+## Next: Safeguarded Generation Architecture
+
+**Problem:** Current evaluation measures issues but doesn't fix them. LLMs still synthesize/add uncited content during report generation.
+
+**Proposed Solution:** Locked Facts + Filler Generation
+
+| Component | What LLM Can Do | Hallucination Risk |
+|-----------|-----------------|-------------------|
+| Verified Findings | Nothing (immutable) | Zero |
+| Body Facts | Arrange order only | Zero |
+| Filler Text | Generate transitions | Low (not factual) |
+| Synthesis Section | Free generation | Accepted (marked) |
+
+**Key Insight:** Separate VERIFIED (locked) from GENERATED (filler). LLM fills gaps between immutable facts.
+
+**Status:** Idea captured in LOG.md. Not yet implemented.
+
 ## Blockers
 
 None.
