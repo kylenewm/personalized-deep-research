@@ -507,6 +507,46 @@ class Configuration(BaseModel):
         }
     )
 
+    # Safeguarded Generation (Pipeline v2)
+    # Three-stage extraction: pointer extraction → arranger → synthesis
+    # Prevents hallucination by having LLM point to content, code extracts it
+    use_safeguarded_generation: bool = Field(
+        default=True,
+        metadata={
+            "x_oap_ui_config": {
+                "type": "boolean",
+                "default": True,
+                "description": "Use safeguarded generation (Pipeline v2). LLM points to facts, code extracts them. Prevents hallucination. Replaces legacy extract/verify/report chain."
+            }
+        }
+    )
+    safeguarded_batch_size: int = Field(
+        default=12,
+        metadata={
+            "x_oap_ui_config": {
+                "type": "slider",
+                "default": 12,
+                "min": 5,
+                "max": 25,
+                "step": 1,
+                "description": "Sources per batch for pointer extraction. Smaller = more accurate, larger = faster."
+            }
+        }
+    )
+    safeguarded_min_score: float = Field(
+        default=0.4,
+        metadata={
+            "x_oap_ui_config": {
+                "type": "slider",
+                "default": 0.4,
+                "min": 0.2,
+                "max": 0.8,
+                "step": 0.1,
+                "description": "Minimum keyword match score for verification. Lower = more facts, higher = stricter."
+            }
+        }
+    )
+
     # Layer 4: Evaluation Framework Configuration
     # Post-hoc evaluation of report quality (separate from pipeline)
     run_evaluation: bool = Field(
