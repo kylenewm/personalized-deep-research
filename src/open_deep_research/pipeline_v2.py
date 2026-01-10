@@ -18,18 +18,26 @@ try:
         Pointer,
         Extraction,
         POINTER_PROMPT,
+        CLEANUP_PROMPT,
         extract_from_pointer,
         format_sources_for_prompt,
         parse_pointer_response,
+        format_facts_for_cleanup,
+        parse_cleanup_response,
+        verify_and_apply_cleanup,
     )
 except ImportError:
     from pointer_extract import (
         Pointer,
         Extraction,
         POINTER_PROMPT,
+        CLEANUP_PROMPT,
         extract_from_pointer,
         format_sources_for_prompt,
         parse_pointer_response,
+        format_facts_for_cleanup,
+        parse_cleanup_response,
+        verify_and_apply_cleanup,
     )
 
 
@@ -168,35 +176,205 @@ async def extract_all_batched(
 
 
 # =============================================================================
+# Deduplication (between Stage 1 and Stage 2)
+# =============================================================================
+
+def compute_text_similarity(text1: str, text2: str) -> float:
+    """Compute Jaccard similarity between two texts."""
+    if not text1 or not text2:
+        return 0.0
+
+    # Tokenize to words
+    words1 = set(text1.lower().split())
+    words2 = set(text2.lower().split())
+
+    if not words1 or not words2:
+        return 0.0
+
+    intersection = len(words1 & words2)
+    union = len(words1 | words2)
+
+    return intersection / union if union > 0 else 0.0
+
+
+def normalize_for_comparison(text: str) -> str:
+    """Normalize text for deduplication comparison."""
+    import re
+    # Strip markdown formatting
+    text = re.sub(r'\*\*([^*]+)\*\*', r'\1', text)  # Bold
+    text = re.sub(r'\*([^*]+)\*', r'\1', text)  # Italic
+    text = re.sub(r'\[([^\]]+)\]\([^)]+\)', r'\1', text)  # Links
+    # Normalize whitespace
+    text = re.sub(r'\s+', ' ', text).strip().lower()
+    return text
+
+
+def deduplicate_extractions(
+    extractions: List[Extraction],
+    similarity_threshold: float = 0.4
+) -> List[Extraction]:
+    """Remove near-duplicate extractions.
+
+    Two-pass deduplication:
+    1. Per-source: Keep only best extraction per source (prevents same source duplicates)
+    2. Cross-source: Remove semantically similar extractions across different sources
+
+    Args:
+        extractions: List of verified extractions
+        similarity_threshold: Jaccard similarity above which to consider duplicate (lowered to 0.4)
+
+    Returns:
+        Deduplicated list (keeps higher-scoring extraction when duplicates found)
+    """
+    if not extractions:
+        return []
+
+    # Sort by match_score descending (keep best version)
+    sorted_ext = sorted(extractions, key=lambda x: x.match_score, reverse=True)
+
+    # Pass 1: One extraction per source (fixes issue #4)
+    seen_sources = set()
+    source_deduped = []
+    for ext in sorted_ext:
+        if not ext.extracted_text:
+            continue
+        source_id = ext.pointer.source_id
+        if source_id not in seen_sources:
+            source_deduped.append(ext)
+            seen_sources.add(source_id)
+
+    # Pass 2: Cross-source semantic deduplication (fixes issue #3)
+    kept = []
+    for ext in source_deduped:
+        # Normalize for comparison
+        ext_normalized = normalize_for_comparison(ext.extracted_text)
+
+        # Check if similar to any already kept
+        is_duplicate = False
+        for kept_ext in kept:
+            kept_normalized = normalize_for_comparison(kept_ext.extracted_text)
+            similarity = compute_text_similarity(ext_normalized, kept_normalized)
+            if similarity >= similarity_threshold:
+                is_duplicate = True
+                break
+
+        if not is_duplicate:
+            kept.append(ext)
+
+    return kept
+
+
+# =============================================================================
+# Cleanup Stage: LLM Points, Code Removes
+# =============================================================================
+
+async def cleanup_extractions(
+    extractions: List[Extraction],
+    llm_call,
+    batch_size: int = 20
+) -> List[Extraction]:
+    """Clean navigation artifacts from extractions.
+
+    LLM outputs cleaned text, code verifies it's an exact substring of original.
+    If verification fails, keeps original. If no content, rejects extraction.
+
+    Args:
+        extractions: Verified extractions to clean
+        llm_call: Async LLM function
+        batch_size: Extractions per cleanup batch
+
+    Returns:
+        Cleaned extractions (rejects pure garbage, cleans others)
+    """
+    if not extractions:
+        return extractions
+
+    cleaned_extractions = []
+
+    # Process in batches
+    for i in range(0, len(extractions), batch_size):
+        batch = extractions[i:i + batch_size]
+
+        # Format for cleanup prompt
+        facts_text = format_facts_for_cleanup(batch)
+        if not facts_text:
+            cleaned_extractions.extend(batch)
+            continue
+
+        prompt = CLEANUP_PROMPT.format(facts=facts_text)
+        response = await llm_call(prompt)
+        cleanup_results = parse_cleanup_response(response)
+
+        # Build lookup for results
+        results_map = {r.get("index"): r.get("cleaned") for r in cleanup_results}
+
+        # Apply and verify cleanup
+        for j, ext in enumerate(batch):
+            if not ext.extracted_text:
+                continue
+
+            cleaned = results_map.get(j)
+            if cleaned is None:
+                # No cleanup result for this one - keep original
+                cleaned_extractions.append(ext)
+                continue
+
+            # Verify and apply
+            result = verify_and_apply_cleanup(ext.extracted_text, cleaned)
+
+            if result is None:
+                # Rejected (pure garbage or too short)
+                continue
+            else:
+                # Update extraction with cleaned text
+                ext.extracted_text = result
+                cleaned_extractions.append(ext)
+
+    return cleaned_extractions
+
+
+# =============================================================================
 # Stage 2: Arranger (Grouping + Curation)
 # =============================================================================
 
-ARRANGER_PROMPT = '''You are organizing research findings into a coherent structure.
+ARRANGER_PROMPT = '''You are organizing research findings to answer a specific question.
 
-Research Topic: {topic}
+QUESTION: {topic}
 
-You have {num_facts} verified facts to organize. Your tasks:
-1. GROUP facts by theme (4-6 themes)
-2. DROP facts that are redundant, off-topic, or low-value (~30-50%)
-3. ORDER facts within each theme for logical flow
+You have {num_facts} verified facts. Your tasks:
+
+1. AGGRESSIVE QUALITY FILTER (drop liberally):
+   - DROP tutorial/promo content: "We'll show you...", "In this guide...", "Learn how to..."
+   - DROP vague claims: "is a versatile tool", "offers many features"
+   - DROP facts that don't contain specific information (names, numbers, comparisons)
+   - DROP anything that reads like marketing copy
+   - KEEP only facts with concrete details that help answer the question
+
+2. RELEVANCE FILTER:
+   - Does this fact DIRECTLY help answer "{topic}"?
+   - If you have to stretch to make it relevant, drop it
+
+3. GROUP remaining facts by theme (3-5 themes)
+   - Themes should map to parts of the answer
+   - For "best X" questions: "Top Models", "Performance Metrics", "Selection Criteria"
+
+4. FINAL CHECK per fact:
+   - Would you cite this in a professional research report?
+   - If embarrassing to include, drop it
 
 VERIFIED FACTS:
 {facts}
 
-Output a JSON object with:
-- "groups": array of {{"theme": "Theme Name", "fact_ids": [1, 2, 5, ...]}}
-- "excluded": array of fact IDs to drop (with brief reason)
-
-Theme names should be 2-4 words, like:
-- "Governance & Regulation"
-- "Technical Safety Measures"
-- "Industry Initiatives"
-- "Research & Evaluation"
+Output JSON:
+{{
+  "groups": [{{"theme": "Theme Name", "fact_ids": [1, 2, 5]}}],
+  "excluded": [{{"id": 3, "reason": "tutorial intro - no specific info"}}]
+}}
 
 CRITICAL:
-- Each fact_id should appear in exactly ONE group OR in excluded
-- Keep at least 50% of facts (drop at most 50%)
-- Order fact_ids within each group for narrative flow
+- Be ruthless. It's better to have 5 strong facts than 15 weak ones.
+- Exclude anything vague, promotional, or tangential.
+- Each fact_id in exactly ONE group OR excluded.
 
 Output ONLY valid JSON.'''
 
@@ -298,6 +476,9 @@ CRITICAL:
 - Do NOT rewrite the facts themselves
 - Transitions only CONNECT, they don't add new information
 - Keep transitions to 1 sentence each
+- If a fact contains marketing superlatives ("best", "most", "#1", "leading"),
+  your transition should attribute it: "The source describes..." or soften it:
+  "among the leading..." Do NOT present vendor marketing as objective fact.
 
 Output JSON:
 {{
@@ -522,86 +703,230 @@ async def assemble_report(
 # =============================================================================
 
 def render_hybrid_report(report: HybridReport, use_color: bool = True) -> str:
-    """Render hybrid report as markdown."""
-    lines = [f"# {report.title}\n"]
-
-    # Styles
-    if use_color:
-        gray = 'style="color: #6b7280; font-style: italic;"'
-        green = 'style="background: #dcfce7; padding: 8px; border-left: 3px solid #16a34a; margin: 8px 0;"'
-
-    # Executive Summary (gray)
-    lines.append("## Executive Summary\n")
-    if use_color:
-        lines.append(f'<p {gray}>{report.executive_summary}</p>\n')
-    else:
+    """Render hybrid report as HTML or plain markdown."""
+    if not use_color:
+        # Plain markdown mode
+        lines = [f"# {report.title}\n"]
+        lines.append("## Executive Summary\n")
         lines.append(f"*{report.executive_summary}*\n")
-
-    # Themed sections
-    lines.append("## Verified Findings\n")
-
-    for section in report.sections:
-        lines.append(f"### {section.theme}\n")
-
-        # Theme intro (gray)
-        if section.intro:
-            if use_color:
-                lines.append(f'<p {gray}>{section.intro}</p>\n')
-            else:
+        lines.append("## Verified Findings\n")
+        for section in report.sections:
+            lines.append(f"### {section.theme}\n")
+            if section.intro:
                 lines.append(f"*{section.intro}*\n")
-
-        # Facts with transitions
-        for i, fact in enumerate(section.facts):
-            # Transition (gray)
-            if i < len(section.transitions) and section.transitions[i]:
-                if use_color:
-                    lines.append(f'<p {gray}>{section.transitions[i]}</p>\n')
-                else:
+            for i, fact in enumerate(section.facts):
+                if i < len(section.transitions) and section.transitions[i]:
                     lines.append(f"*{section.transitions[i]}*\n")
-
-            # Verified fact (green)
-            if use_color:
-                lines.append(f'<div {green}>')
-                lines.append(fact.extracted_text)
-                if fact.source_url:
-                    lines.append(f'<br><small><a href="{fact.source_url}">[Source: {fact.pointer.context}]</a></small>')
-                lines.append('</div>\n')
-            else:
                 lines.append(f"> {fact.extracted_text}")
                 if fact.source_url:
                     lines.append(f"> — [{fact.pointer.context}]({fact.source_url})")
                 lines.append("")
-
-    # Analysis section (gray)
-    lines.append("## Analysis & Implications\n")
-    if use_color:
-        # Split into paragraphs
-        paragraphs = report.analysis.split('\n\n')
-        for p in paragraphs:
-            if p.strip():
-                lines.append(f'<p {gray}>{p.strip()}</p>\n')
-    else:
+        lines.append("## Analysis & Implications\n")
         lines.append(f"*{report.analysis}*\n")
-
-    # Conclusion (gray)
-    lines.append("## Conclusion\n")
-    if use_color:
-        lines.append(f'<p {gray}>{report.conclusion}</p>\n')
-    else:
+        lines.append("## Conclusion\n")
         lines.append(f"*{report.conclusion}*\n")
+        return "\n".join(lines)
+
+    # HTML mode
+    lines = [f'<h1>{report.title}</h1>']
+
+    # Executive Summary
+    lines.append('<h2>Executive Summary</h2>')
+    lines.append(f'<p class="synthesis">{report.executive_summary}</p>')
+
+    # Themed sections
+    lines.append('<h2>Verified Findings</h2>')
+
+    for section in report.sections:
+        lines.append(f'<h3>{section.theme}</h3>')
+
+        # Theme intro
+        if section.intro:
+            lines.append(f'<p class="synthesis">{section.intro}</p>')
+
+        # Facts with transitions
+        for i, fact in enumerate(section.facts):
+            # Transition
+            if i < len(section.transitions) and section.transitions[i]:
+                lines.append(f'<p class="synthesis">{section.transitions[i]}</p>')
+
+            # Verified fact
+            lines.append('<div class="verified-fact">')
+            lines.append(f'<p>{fact.extracted_text}</p>')
+            if fact.source_url:
+                lines.append(f'<a href="{fact.source_url}" class="source-link">{fact.pointer.context}</a>')
+            lines.append('</div>')
+
+    # Analysis section
+    lines.append('<h2>Analysis & Implications</h2>')
+    paragraphs = report.analysis.split('\n\n')
+    for p in paragraphs:
+        if p.strip():
+            lines.append(f'<p class="synthesis">{p.strip()}</p>')
+
+    # Conclusion
+    lines.append('<h2>Conclusion</h2>')
+    lines.append(f'<p class="synthesis">{report.conclusion}</p>')
 
     # Stats footer
-    lines.append("\n---\n")
-    lines.append("**Report Statistics:**")
-    lines.append(f"- Sources processed: {report.total_extracted}")
-    lines.append(f"- Verified facts: {report.total_verified}")
-    lines.append(f"- Facts in report: {report.total_used}")
-    lines.append(f"- Themes: {len(report.sections)}")
-    if use_color:
-        lines.append("- <span style='background: #dcfce7; padding: 2px 6px;'>Green = verified from source</span>")
-        lines.append("- <span style='color: #6b7280; font-style: italic;'>Gray italic = AI synthesis</span>")
+    lines.append('<hr>')
+    lines.append('<div class="stats">')
+    lines.append(f'Sources: {report.total_extracted} · Verified: {report.total_verified} · In report: {report.total_used} · Themes: {len(report.sections)}')
+    lines.append('</div>')
 
     return "\n".join(lines)
+
+
+# HTML template with polished CSS
+HTML_TEMPLATE = '''<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>{title}</title>
+    <style>
+        :root {{
+            --text-primary: #1a1a2e;
+            --text-secondary: #4a5568;
+            --text-muted: #718096;
+            --bg-primary: #ffffff;
+            --bg-subtle: #f7fafc;
+            --border-light: #e2e8f0;
+            --accent: #4a6fa5;
+            --accent-light: #eef2f7;
+        }}
+
+        * {{
+            box-sizing: border-box;
+        }}
+
+        body {{
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            max-width: 720px;
+            margin: 0 auto;
+            padding: 3rem 2rem;
+            line-height: 1.75;
+            color: var(--text-primary);
+            background: var(--bg-primary);
+            font-size: 16px;
+            -webkit-font-smoothing: antialiased;
+        }}
+
+        h1 {{
+            font-size: 2rem;
+            font-weight: 700;
+            letter-spacing: -0.025em;
+            margin-bottom: 2rem;
+            color: var(--text-primary);
+        }}
+
+        h2 {{
+            font-size: 1.375rem;
+            font-weight: 600;
+            margin-top: 3rem;
+            margin-bottom: 1.25rem;
+            color: var(--text-primary);
+            letter-spacing: -0.015em;
+        }}
+
+        h3 {{
+            font-size: 1.125rem;
+            font-weight: 600;
+            margin-top: 2.5rem;
+            margin-bottom: 1rem;
+            color: var(--text-secondary);
+        }}
+
+        p {{
+            margin: 0 0 1.25rem 0;
+        }}
+
+        .verified-fact {{
+            background: var(--bg-subtle);
+            border-left: 3px solid var(--accent);
+            padding: 1.25rem 1.5rem;
+            margin: 1.5rem 0;
+            border-radius: 0 6px 6px 0;
+        }}
+
+        .verified-fact p {{
+            margin: 0;
+            font-size: 0.9375rem;
+            color: var(--text-primary);
+            line-height: 1.7;
+        }}
+
+        .source-link {{
+            display: inline-block;
+            margin-top: 0.75rem;
+            font-size: 0.8125rem;
+            color: var(--accent);
+            text-decoration: none;
+            opacity: 0.85;
+        }}
+
+        .source-link:hover {{
+            opacity: 1;
+            text-decoration: underline;
+        }}
+
+        .synthesis {{
+            color: var(--text-muted);
+            font-size: 0.9375rem;
+            margin: 1rem 0;
+            line-height: 1.7;
+        }}
+
+        .stats {{
+            margin-top: 3rem;
+            padding: 1.25rem 1.5rem;
+            background: var(--bg-subtle);
+            border-radius: 8px;
+            font-size: 0.875rem;
+            color: var(--text-muted);
+            border: 1px solid var(--border-light);
+        }}
+
+        hr {{
+            border: none;
+            border-top: 1px solid var(--border-light);
+            margin: 3rem 0;
+        }}
+
+        a {{
+            color: var(--accent);
+            text-decoration: none;
+        }}
+
+        a:hover {{
+            text-decoration: underline;
+        }}
+
+        /* Print styles */
+        @media print {{
+            body {{
+                padding: 1rem;
+                font-size: 14px;
+            }}
+            .verified-fact {{
+                break-inside: avoid;
+            }}
+        }}
+    </style>
+</head>
+<body>
+{content}
+</body>
+</html>'''
+
+
+def render_html(report: HybridReport) -> str:
+    """Render report as complete HTML with embedded CSS."""
+    markdown_content = render_hybrid_report(report, use_color=True)
+    return HTML_TEMPLATE.format(
+        title=report.title,
+        content=markdown_content
+    )
 
 
 # =============================================================================
@@ -650,6 +975,23 @@ async def run_pipeline_v2(
 
     if not verified:
         raise ValueError("No verified extractions - cannot generate report")
+
+    # Deduplication: Remove near-duplicate extractions
+    deduped = deduplicate_extractions(verified)  # Uses default threshold=0.4
+    progress("DEDUP", f"Deduplicated: {len(verified)} → {len(deduped)} facts ({len(verified) - len(deduped)} duplicates removed)")
+    verified = deduped
+
+    if not verified:
+        raise ValueError("No facts remaining after deduplication")
+
+    # Cleanup: LLM points to garbage, code removes it
+    progress("CLEANUP", f"Cleaning {len(verified)} facts (LLM points, code removes)...")
+    cleaned = await cleanup_extractions(verified, llm_call)
+    progress("CLEANUP", f"Cleaned: {len(verified)} → {len(cleaned)} facts ({len(verified) - len(cleaned)} removed as too short)")
+    verified = cleaned
+
+    if not verified:
+        raise ValueError("No facts remaining after cleanup")
 
     # Stage 2: Arrange and curate
     progress("ARRANGE", f"Grouping {len(verified)} facts by theme...")

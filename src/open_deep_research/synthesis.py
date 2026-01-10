@@ -159,7 +159,7 @@ def synthesize_report(
 
 
 def render_report_markdown(report: SynthesizedReport, use_color: bool = True) -> str:
-    """Render synthesized report as markdown with color styling.
+    """Render synthesized report as markdown with clean styling.
 
     Args:
         report: The synthesized report
@@ -170,21 +170,27 @@ def render_report_markdown(report: SynthesizedReport, use_color: bool = True) ->
     """
     lines = [f"# {report.title}\n"]
 
-    # Color styles
+    # Styles (using CSS classes for cleaner HTML)
     if use_color:
-        verified_style = 'style="background: #dcfce7; padding: 8px; border-left: 3px solid #16a34a; margin: 8px 0;"'
-        synth_style = 'style="color: #6b7280; font-style: italic;"'
+        verified_style = 'class="verified-fact"'
+        synth_style = 'class="synthesis"'
 
     for block in report.blocks:
         if block.type == "verified":
+            content = block.content
+            # Skip very short content
+            if len(content) < 30:
+                continue
+
             if use_color:
                 lines.append(f'<div {verified_style}>')
-                lines.append(f'{block.content}')
+                lines.append(f'<p>{content}</p>')
                 if block.source_url:
-                    lines.append(f'<br><small><a href="{block.source_url}">[Source: {block.context}]</a></small>')
+                    context = block.context or "Source"
+                    lines.append(f'<a href="{block.source_url}" class="source-link">{context}</a>')
                 lines.append('</div>\n')
             else:
-                lines.append(f"> {block.content}")
+                lines.append(f"> {content}")
                 if block.source_url:
                     lines.append(f"> — [{block.context}]({block.source_url})")
                 lines.append("")
@@ -203,12 +209,7 @@ def render_report_markdown(report: SynthesizedReport, use_color: bool = True) ->
 
     # Stats footer
     lines.append("\n---\n")
-    lines.append(f"**Report Statistics:**")
-    lines.append(f"- Verified facts: {report.verified_count}")
-    lines.append(f"- Synthesized sections: {report.synthesis_count}")
-    if use_color:
-        lines.append(f"- <span style='background: #dcfce7; padding: 2px 6px;'>Green = verified from source</span>")
-        lines.append(f"- <span style='color: #6b7280; font-style: italic;'>Gray italic = AI synthesis</span>")
+    lines.append(f"**Report Statistics:** {report.verified_count} verified facts, {report.synthesis_count} AI transitions")
 
     return "\n".join(lines)
 

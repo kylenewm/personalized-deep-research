@@ -87,6 +87,77 @@ def clean_extracted_text(text: str, max_length: int = 200) -> str:
     return text
 
 
+def is_quality_extraction(text: str) -> bool:
+    """Filter out garbage extractions (tables, metadata, fragments, navigation).
+
+    Args:
+        text: Extracted text to evaluate
+
+    Returns:
+        True if text is quality content, False if garbage
+    """
+    if not text or len(text) < 50:  # Minimum 50 chars for substance
+        return False
+
+    # Reject table fragments (multiple pipe characters)
+    if text.count('|') > 3:
+        return False
+
+    # Reject metadata blocks
+    if 'Metadata' in text and ('License' in text or 'Provider' in text):
+        return False
+
+    # --- Navigation pattern rejection ---
+    text_lower = text.lower()
+
+    # Reject navigation link patterns
+    nav_patterns = [
+        '[skip to',           # [Skip to main content]
+        '[read more]',        # Action links
+        '[contact us]',
+        '[learn more]',
+        '[sign up]',
+        '[log in]',
+        '[home]',
+        '[about]',
+        'log in[',            # Log in[Sign up] combo
+        'sign up[',
+        '✕dismiss',           # Dismissible banners
+        'dismiss this',
+        '[products]',
+        '[services]',
+        '[pricing]',
+    ]
+    for pattern in nav_patterns:
+        if pattern in text_lower:
+            return False
+
+    # Reject if multiple bracket links (likely nav menu)
+    bracket_links = re.findall(r'\[[^\]]{1,20}\]', text)
+    if len(bracket_links) >= 3:
+        # Likely navigation: [Home] [About] [Products]
+        return False
+
+    # Reject if mostly punctuation/formatting (low alpha ratio)
+    alpha_count = sum(c.isalpha() for c in text)
+    alpha_ratio = alpha_count / max(len(text), 1)
+    if alpha_ratio < 0.5:
+        return False
+
+    # Reject truncated content ending with incomplete markers
+    stripped = text.rstrip()
+    if stripped.endswith('*') or stripped.endswith('...') or stripped.endswith(':'):
+        # But allow ... if it's after a complete sentence
+        if not (stripped.endswith('...') and len(stripped) > 50 and stripped[-4] in '.!?'):
+            return False
+
+    # Reject if starts with markdown artifacts
+    if text.lstrip().startswith(('##', '**', '| ', '- |')):
+        return False
+
+    return True
+
+
 def find_best_match(
     keywords: List[str],
     source_content: str,
@@ -216,6 +287,17 @@ def extract_from_pointer(
         min_score=min_score
     )
 
+    # Apply quality filter to extracted text
+    if extracted_text and not is_quality_extraction(extracted_text):
+        # Garbage extraction - mark as not found
+        return Extraction(
+            pointer=pointer,
+            status="not_found",
+            extracted_text=None,
+            match_score=0.0,
+            source_url=url
+        )
+
     if extracted_text and score >= min_score:
         status = "verified"
     elif score > 0:
@@ -232,13 +314,88 @@ def extract_from_pointer(
     )
 
 
-# Prompt for LLM to generate pointers
-POINTER_PROMPT = '''Extract key facts from these sources about: {topic}
+# Prompt for LLM to clean extractions - outputs clean text, code verifies substring
+CLEANUP_PROMPT = '''For each text, output ONLY the meaningful content with navigation/UI garbage removed.
 
-For each source, identify 1-2 important facts. Output pointers with:
+Rules:
+- Remove navigation links: [Skip to...], [Read more], [Contact us], Log in, Sign up
+- Remove UI artifacts: Search K, menu items, keyboard shortcuts
+- Remove image markdown: ![](...)
+- Remove header artifacts: # Title, [Site Name](/), page titles with |
+- Remove formatting artifacts: * **Date** ###, changelog prefixes
+- Remove unrelated content: FAQ questions in brackets, promotional text
+- Keep the actual informative content about the topic
+- If there's no meaningful content, output "NO_CONTENT"
+- CRITICAL: Output must be an EXACT substring of the original (copy-paste, don't rephrase!)
+
+Texts:
+{facts}
+
+Output JSON array:
+[
+  {{"index": 0, "cleaned": "the exact meaningful content here"}},
+  {{"index": 1, "cleaned": "NO_CONTENT"}},
+  ...
+]
+
+Output ONLY the JSON array.'''
+
+
+def parse_cleanup_response(response: str) -> List[dict]:
+    """Parse LLM cleanup response."""
+    try:
+        match = re.search(r'\[[\s\S]*\]', response)
+        if match:
+            return json.loads(match.group())
+    except json.JSONDecodeError:
+        pass
+    return []
+
+
+def verify_and_apply_cleanup(original: str, cleaned: str) -> Optional[str]:
+    """Verify cleaned text is exact substring of original.
+
+    Returns cleaned text if valid, None if should reject.
+    """
+    if not cleaned or cleaned == "NO_CONTENT":
+        return None  # Reject - no meaningful content
+
+    if cleaned in original:
+        # Valid - it's an exact substring
+        if len(cleaned) >= 50:  # Minimum length for meaningful content
+            return cleaned
+        else:
+            return None  # Too short after cleaning
+    else:
+        # LLM modified the text - reject, keep original
+        return original
+
+
+def format_facts_for_cleanup(extractions: List['Extraction']) -> str:
+    """Format extractions for the cleanup prompt."""
+    lines = []
+    for i, ext in enumerate(extractions):
+        if ext.status == "verified" and ext.extracted_text:
+            lines.append(f"[{i}] {ext.extracted_text[:500]}")
+    return "\n\n".join(lines)
+
+
+# Prompt for LLM to generate pointers
+POINTER_PROMPT = '''Extract facts from these sources that DIRECTLY answer: {topic}
+
+RELEVANCE CHECK (critical):
+- Only extract facts that help answer the specific question
+- Skip sources that don't contain relevant information
+- Skip generic/promotional content ("We'll show you how to...", "In this article...")
+- Skip tutorial intros, marketing claims, and filler text
+
+For each RELEVANT fact, output:
 - source_id: Match exactly (e.g., "src_001")
 - keywords: 3-5 SINGLE words that appear in that source (not phrases)
 - context: What this fact is about (3-5 words)
+- relevance: 1-5 score (5=directly answers question, 3=somewhat relevant, 1=tangential)
+
+ONLY include facts with relevance >= 3.
 
 CRITICAL: Use single distinctive words, not phrases. Example:
 - Good: ["Biden", "October", "2023", "Executive", "Order"]
@@ -249,15 +406,23 @@ Sources:
 
 Output JSON array:
 [
-  {{"source_id": "src_001", "keywords": ["RAND", "security", "2025", "framework"], "context": "RAND security report"}},
-  {{"source_id": "src_002", "keywords": ["OpenAI", "Council", "deployment", "safety"], "context": "OpenAI governance"}}
+  {{"source_id": "src_001", "keywords": ["latency", "200ms", "L40S"], "context": "Speech model latency", "relevance": 5}},
+  {{"source_id": "src_002", "keywords": ["ElevenLabs", "cloning", "accuracy"], "context": "Voice cloning quality", "relevance": 4}}
 ]
 
-Output ONLY the JSON array.'''
+Output ONLY the JSON array. Skip sources with no relevant facts.'''
 
 
-def parse_pointer_response(response: str) -> List[Pointer]:
-    """Parse LLM response into Pointer objects."""
+def parse_pointer_response(response: str, min_relevance: int = 3) -> List[Pointer]:
+    """Parse LLM response into Pointer objects.
+
+    Args:
+        response: LLM response containing JSON array
+        min_relevance: Minimum relevance score to include (1-5, default 3)
+
+    Returns:
+        List of Pointer objects with relevance >= min_relevance
+    """
     # Try to extract JSON array
     try:
         # Find JSON array in response
@@ -267,6 +432,11 @@ def parse_pointer_response(response: str) -> List[Pointer]:
             pointers = []
             for item in data:
                 if isinstance(item, dict):
+                    # Filter by relevance score
+                    relevance = item.get("relevance", 5)  # Default high for backwards compat
+                    if relevance < min_relevance:
+                        continue  # Skip low-relevance pointers
+
                     pointers.append(Pointer(
                         source_id=str(item.get("source_id", "")),
                         keywords=item.get("keywords", []),
