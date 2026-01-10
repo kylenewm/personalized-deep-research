@@ -1,0 +1,43 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(./venv/bin/pytest *)",
+      "Bash(./venv/bin/python *)",
+      "Bash(source venv/bin/activate *)",
+      "Bash(ruff *)",
+      "Bash(python scripts/*)",
+      "Bash(git status)",
+      "Bash(git diff *)",
+      "Bash(git log *)",
+      "Bash(git add *)",
+      "Bash(git branch *)",
+      "Bash(git commit *)",
+      "Bash(git push *)",
+      "Bash(gh pr *)"
+    ]
+  },
+  "hooks": {
+    "PostToolUse": [
+      {
+        "matcher": "Write|Edit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "jq -r '.tool_input.file_path // empty' | { read p; [[ -n \"$p\" && $p == *.py ]] && ruff format \"$p\" 2>/dev/null; true; }"
+          }
+        ]
+      }
+    ],
+    "Notification": [
+      {
+        "matcher": "",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "osascript -e 'display notification \"Claude needs attention\" with title \"Claude Code\"'"
+          }
+        ]
+      }
+    ]
+  }
+}
