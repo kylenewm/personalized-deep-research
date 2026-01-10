@@ -81,8 +81,8 @@ def clean_extracted_text(text: str, max_length: int = 200) -> str:
         if cut_point > max_length // 2:  # Only use if reasonably far in
             text = text[:cut_point + 1]
         else:
-            # Fall back to word boundary
-            text = truncated.rsplit(' ', 1)[0] + '...'
+            # Fall back to word boundary - don't add ... (would fail quality filter)
+            text = truncated.rsplit(' ', 1)[0]
 
     return text
 
@@ -139,9 +139,11 @@ def is_quality_extraction(text: str) -> bool:
         return False
 
     # Reject if mostly punctuation/formatting (low alpha ratio)
+    # NOTE: 0.35 allows numeric-heavy content (prices, metrics, percentages)
+    # Previous 0.5 was rejecting valuable data like "$0.30/1K | $15/1M"
     alpha_count = sum(c.isalpha() for c in text)
     alpha_ratio = alpha_count / max(len(text), 1)
-    if alpha_ratio < 0.5:
+    if alpha_ratio < 0.35:
         return False
 
     # Reject truncated content ending with incomplete markers
@@ -152,7 +154,11 @@ def is_quality_extraction(text: str) -> bool:
             return False
 
     # Reject if starts with markdown artifacts
-    if text.lstrip().startswith(('##', '**', '| ', '- |')):
+    if text.lstrip().startswith(('##', '**', '| ', '- |', '####', '*What')):
+        return False
+
+    # Too many markdown artifacts = formatting, not content
+    if text.count('**') > 4 or text.count('](') > 2:
         return False
 
     return True
@@ -201,49 +207,52 @@ def find_best_match(
     if match_ratio < min_score:
         return None, match_ratio
 
-    # Find the sentence(s) containing the most keywords
-    # Split into sentences
-    sentences = re.split(r'(?<=[.!?])\s+', source_content)
+    # Find ALL sentences containing keywords, ranked by score
+    # Split on: paragraphs, markdown headers, table rows, then sentences
+    # First split on paragraph/structural boundaries
+    chunks = re.split(r'\n\n+|\n(?=##?\s)|\n(?=\|)', source_content)
+    # Then split each chunk into sentences
+    sentences = []
+    for chunk in chunks:
+        chunk = chunk.strip()
+        if chunk:
+            # Split on sentence endings
+            sents = re.split(r'(?<=[.!?])\s+', chunk)
+            sentences.extend([s.strip() for s in sents if s.strip()])
 
-    best_sentence = None
-    best_score = 0.0
-
+    # Score all sentences
+    candidates = []
     for sent in sentences:
         sent_lower = sent.lower()
         sent_keywords = sum(1 for kw in keywords_found if kw in sent_lower)
         if sent_keywords > 0:
             score = sent_keywords / len(keywords_lower)
-            if score > best_score:
-                best_score = score
-                best_sentence = sent.strip()
+            candidates.append((score, sent.strip()))
 
-    # If single sentence doesn't have enough, try to find a passage
-    if best_score < min_score and len(sentences) > 1:
-        # Try pairs of consecutive sentences
-        for i in range(len(sentences) - 1):
-            passage = sentences[i] + " " + sentences[i + 1]
-            passage_lower = passage.lower()
-            passage_keywords = sum(1 for kw in keywords_found if kw in passage_lower)
+    # Also try sentence pairs for better context
+    for i in range(len(sentences) - 1):
+        passage = sentences[i] + " " + sentences[i + 1]
+        passage_lower = passage.lower()
+        passage_keywords = sum(1 for kw in keywords_found if kw in passage_lower)
+        if passage_keywords > 0:
             score = passage_keywords / len(keywords_lower)
-            if score > best_score:
-                best_score = score
-                best_sentence = passage.strip()
+            candidates.append((score, passage.strip()))
 
-        # Try triplets if still not enough
-        if best_score < min_score and len(sentences) > 2:
-            for i in range(len(sentences) - 2):
-                passage = sentences[i] + " " + sentences[i + 1] + " " + sentences[i + 2]
-                passage_lower = passage.lower()
-                passage_keywords = sum(1 for kw in keywords_found if kw in passage_lower)
-                score = passage_keywords / len(keywords_lower)
-                if score > best_score:
-                    best_score = score
-                    best_sentence = passage.strip()
+    # Sort by score descending
+    candidates.sort(key=lambda x: x[0], reverse=True)
 
-    if best_score >= min_score:
-        return clean_extracted_text(best_sentence, max_length=300), best_score
+    # Return first candidate that passes quality filter
+    for score, text in candidates:
+        if score >= min_score:
+            cleaned = clean_extracted_text(text, max_length=300)
+            if is_quality_extraction(cleaned):
+                return cleaned, score
 
-    return None, best_score
+    # Fallback: return best score even if quality filter fails
+    if candidates and candidates[0][0] >= min_score:
+        return clean_extracted_text(candidates[0][1], max_length=300), candidates[0][0]
+
+    return None, candidates[0][0] if candidates else 0.0
 
 
 def extract_from_pointer(
@@ -381,36 +390,28 @@ def format_facts_for_cleanup(extractions: List['Extraction']) -> str:
 
 
 # Prompt for LLM to generate pointers
-POINTER_PROMPT = '''Extract facts from these sources that DIRECTLY answer: {topic}
+POINTER_PROMPT = '''Topic: {topic}
 
-RELEVANCE CHECK (critical):
-- Only extract facts that help answer the specific question
-- Skip sources that don't contain relevant information
-- Skip generic/promotional content ("We'll show you how to...", "In this article...")
-- Skip tutorial intros, marketing claims, and filler text
+Extract ALL concrete facts from each source. Look for:
+- Specific claims with evidence (dates, numbers, names, studies)
+- Key findings or conclusions
+- Definitions or explanations of important concepts
+- Relationships, comparisons, or cause-effect statements
 
-For each RELEVANT fact, output:
-- source_id: Match exactly (e.g., "src_001")
-- keywords: 3-5 SINGLE words that appear in that source (not phrases)
-- context: What this fact is about (3-5 words)
-- relevance: 1-5 score (5=directly answers question, 3=somewhat relevant, 1=tangential)
+Skip: promotional text, opinions without evidence, vague statements.
 
-ONLY include facts with relevance >= 3.
-
-CRITICAL: Use single distinctive words, not phrases. Example:
-- Good: ["Biden", "October", "2023", "Executive", "Order"]
-- Bad: ["Executive Order", "October 2023"] (these are phrases)
+For each fact:
+- source_id: exactly as shown (src_000, src_001, etc)
+- keywords: 3-5 SINGLE distinctive words from that sentence
 
 Sources:
 {sources}
 
 Output JSON array:
 [
-  {{"source_id": "src_001", "keywords": ["latency", "200ms", "L40S"], "context": "Speech model latency", "relevance": 5}},
-  {{"source_id": "src_002", "keywords": ["ElevenLabs", "cloning", "accuracy"], "context": "Voice cloning quality", "relevance": 4}}
-]
-
-Output ONLY the JSON array. Skip sources with no relevant facts.'''
+  {{"source_id": "src_000", "keywords": ["researchers", "discovered", "2024"]}},
+  {{"source_id": "src_001", "keywords": ["study", "participants", "improved"]}}
+]'''
 
 
 def parse_pointer_response(response: str, min_relevance: int = 3) -> List[Pointer]:

@@ -1382,3 +1382,11 @@ Investigated why arranger drops 73% of facts. Sample exclusion reasons:
 
 **Ready to commit.**
 
+### Committed and Pushed
+
+```
+b53972d Fix coverage: remove per-source dedup limit, disable chunking
+```
+
+Pushed to main. Session complete.
+

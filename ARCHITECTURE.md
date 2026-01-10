@@ -2,6 +2,11 @@
 
 This document provides a complete technical breakdown of how the Deep Research agent works, from user query to final verified report.
 
+**Related docs:**
+- `EXECUTION_TRACE.md` — Step-by-step trace with exact prompts and file:line references (for debugging/modifying)
+- `STATE.md` — Current status, decisions, and development sandbox
+- `scripts/sandbox_pipeline.py` — Fast iteration on Pipeline v2 without re-running research
+
 ---
 
 ## Table of Contents
@@ -77,28 +82,44 @@ User Query
 └─────────┬───────────┘
           │
           ▼
-┌─────────────────────┐
-│  extract_evidence   │  ← S03: Extract candidate quotes from sources
-└─────────┬───────────┘
-          │
-          ▼
-┌─────────────────────┐
-│   verify_evidence   │  ← S04: Verify quotes exist in sources
-└─────────┬───────────┘
-          │
-          ▼
-┌─────────────────────────┐
-│ final_report_generation │  ← Generate report with verified findings
-└─────────┬───────────────┘
-          │
-          ▼
-┌─────────────────────┐
-│    verify_claims    │  ← Health check: Claim verification
-└─────────┬───────────┘
-          │
-          ▼
-      Final Report
+    ┌─────┴─────┐
+    │           │
+    ▼           ▼
+SAFEGUARDED   LEGACY
+(default)     (optional)
+    │           │
+    ▼           ▼
+┌───────────────────┐  ┌─────────────────────┐
+│ safeguarded_report│  │  extract_evidence   │
+│  (Pipeline v2)    │  └─────────┬───────────┘
+│                   │            │
+│ 1. Pointer extract│            ▼
+│ 2. Arrange themes │  ┌─────────────────────┐
+│ 3. Synthesize     │  │   verify_evidence   │
+└─────────┬─────────┘  └─────────┬───────────┘
+          │                      │
+          │                      ▼
+          │            ┌─────────────────────────┐
+          │            │ final_report_generation │
+          │            └─────────┬───────────────┘
+          │                      │
+          └──────────┬───────────┘
+                     │
+                     ▼
+              ┌─────────────┐
+              │ run_eval    │  ← Optional: Post-hoc evaluation
+              └──────┬──────┘
+                     │
+                     ▼
+                Final Report
 ```
+
+### Path Selection
+
+| Config Flag | Value | Path |
+|-------------|-------|------|
+| `use_safeguarded_generation` | `true` (default) | Safeguarded (Pipeline v2) |
+| `use_safeguarded_generation` | `false` | Legacy (extract → verify → report) |
 
 ---
 
@@ -608,6 +629,105 @@ class ResearcherState(TypedDict):
 
 ---
 
+## Pipeline v2: Safeguarded Generation
+
+Pipeline v2 replaces the legacy extract → verify → report chain with a three-stage safeguarded approach that prevents hallucination structurally.
+
+### Core Principle
+
+**LLM never writes factual content. It only points to what to extract.**
+
+```
+Legacy (broken):
+  LLM reads source → LLM writes claim → hallucination happens
+
+Safeguarded (Pipeline v2):
+  LLM reads source → LLM outputs keywords → Code extracts text → verified
+```
+
+### Three Stages
+
+#### Stage 1: Batched Pointer Extraction
+
+**File:** `src/open_deep_research/pointer_extract.py`
+
+**What it does:**
+1. Batch sources (10-12 per batch)
+2. LLM outputs pointers: `{source_id, keywords[], context}`
+3. Code uses keyword matching to find actual text in source
+4. Quality filter rejects garbage (tables, metadata, fragments)
+
+**Key insight:** Single keywords match better than phrases. "Biden", "October", "2023" works better than "October 2023".
+
+#### Stage 2: Arranger (Grouping + Curation)
+
+**File:** `src/open_deep_research/pipeline_v2.py`
+
+**What it does:**
+1. Receives all verified extractions
+2. LLM groups facts by theme (4-6 themes)
+3. LLM curates: drop 40-60% of redundant/off-topic facts
+4. Output: Theme groups with fact IDs
+
+#### Stage 3: Per-Theme Synthesis
+
+**File:** `src/open_deep_research/pipeline_v2.py`
+
+**What it does:**
+1. For each theme:
+   - LLM writes intro (2-3 sentences)
+   - LLM writes transitions between facts
+   - Facts themselves are LOCKED (code-extracted text)
+2. Assembly: Executive summary + themed sections + analysis + conclusion
+
+### Output Format
+
+```markdown
+## Verified Findings
+
+### Theme: Model Performance
+
+<p style="color: gray;">AI-written transition...</p>
+
+<div style="background: green;">
+Verified fact extracted from source...
+<small>[Source: Title](url)</small>
+</div>
+
+<p style="color: gray;">AI-written transition...</p>
+
+<div style="background: green;">
+Another verified fact...
+</div>
+```
+
+### Deduplication
+
+Two-pass deduplication prevents repetition:
+
+1. **Per-source:** Max 1 extraction per source URL
+2. **Cross-source:** Jaccard similarity > 0.4 = duplicate
+
+### Quality Filter
+
+Rejects garbage extractions:
+- Table fragments (`| | |`)
+- Metadata blocks (`Metadata...License`)
+- Low alpha ratio (<50%)
+- Truncated content
+- Markdown artifacts
+
+### Key Files
+
+| File | Purpose |
+|------|---------|
+| `pipeline_v2.py` | Main orchestration, arranger, synthesis |
+| `pointer_extract.py` | Pointer extraction, keyword matching, quality filter |
+| `synthesis.py` | Report assembly helpers |
+| `nodes/safeguarded_report.py` | LangGraph node wrapper |
+
+---
+
 ## Anti-Hallucination System
 
 The system uses multiple layers to prevent hallucinated information:
@@ -679,6 +799,7 @@ Every single claim MUST have a citation.
 | `nodes/extract.py` | `extract_evidence` |
 | `nodes/verify.py` | `verify_evidence`, `verify_claims` |
 | `nodes/report.py` | `final_report_generation` |
+| `nodes/safeguarded_report.py` | `safeguarded_report_generation` (Pipeline v2) |
 
 ### Utilities
 
@@ -690,6 +811,15 @@ Every single claim MUST have a citation.
 | `verification.py` | Claim verification with embeddings |
 | `logic/sanitize.py` | HTML sanitization for quotes |
 | `logic/document_processing.py` | Spacy-based chunking |
+
+### Pipeline v2 (Safeguarded Generation)
+
+| File | Purpose |
+|------|---------|
+| `pipeline_v2.py` | Three-stage pipeline: extract → arrange → synthesize |
+| `pointer_extract.py` | LLM pointer → code extraction, keyword matching |
+| `synthesis.py` | Report assembly, theme rendering |
+| `nodes/safeguarded_report.py` | LangGraph node wrapper for pipeline_v2 |
 
 ### Test Scripts
 

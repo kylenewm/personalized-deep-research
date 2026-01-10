@@ -6,7 +6,7 @@ Deep Research Agent — AI-powered research agent that searches the web, gathers
 
 ## Current Status
 
-**Two fixes applied and validated. Ready to commit.**
+**Two fixes committed and pushed to main.**
 
 | Component | Status |
 |-----------|--------|
@@ -64,15 +64,21 @@ CHUNK_THRESHOLD = 100000  # Effectively disabled
 | 216 | ~$1.64 | ~$0.30 |
 | 400 | ~$3.00 | ~$0.55 |
 
-## Files Changed (Ready to Commit)
+## Files Changed
 
 - `src/open_deep_research/pipeline_v2.py`
   - Removed per-source dedup limit in `deduplicate_extractions()`
   - Disabled chunking (CHUNK_THRESHOLD = 100000)
 
+## Commit
+
+```
+b53972d Fix coverage: remove per-source dedup limit, disable chunking
+```
+
 ## Next Steps
 
-1. **Commit fixes** ← READY
+None pending. System is stable.
 
 ## Already Tried (Don't Repeat)
 
@@ -85,4 +91,4 @@ CHUNK_THRESHOLD = 100000  # Effectively disabled
 
 ## Last Updated
 
-2026-01-10 — Fixes validated, ready to commit.
+2026-01-10 — Fixes committed and pushed to main.

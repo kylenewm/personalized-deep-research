@@ -1015,12 +1015,15 @@ HTML_TEMPLATE = '''<!DOCTYPE html>
 
 
 def render_html(report: HybridReport) -> str:
-    """Render report as complete HTML with embedded CSS."""
-    markdown_content = render_hybrid_report(report, use_color=True)
-    return HTML_TEMPLATE.format(
-        title=report.title,
-        content=markdown_content
-    )
+    """Render report as complete HTML with embedded CSS.
+
+    Uses the new template-based renderer from render.py.
+    """
+    try:
+        from .render import render_report
+    except ImportError:
+        from render import render_report
+    return render_report(report)
 
 
 # =============================================================================

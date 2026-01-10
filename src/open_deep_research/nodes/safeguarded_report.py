@@ -15,6 +15,7 @@ import asyncio
 import logging
 from typing import Dict
 
+from langchain_core.messages import HumanMessage
 from langchain_core.runnables import RunnableConfig
 from openai import AsyncOpenAI
 
@@ -76,9 +77,24 @@ async def safeguarded_report_generation(state: AgentState, config: RunnableConfi
 
     print(f"[SAFEGUARDED] Processing {len(sources_dict)} sources...")
 
-    # Get topic from research brief
-    research_brief = state.get("research_brief", "")
-    topic = research_brief[:500] if research_brief else "Research findings"
+    # Get original user query from messages (not the research brief!)
+    # The brief is a PLAN, but the prompts need the actual QUESTION
+    messages = state.get("messages", [])
+    topic = None
+    for msg in messages:
+        # Find the first human message - that's the original query
+        if isinstance(msg, HumanMessage):
+            topic = msg.content
+            break
+        elif isinstance(msg, dict) and msg.get("role") == "user":
+            topic = msg.get("content", "")
+            break
+
+    # Fallback to brief if no user message found (shouldn't happen)
+    if not topic:
+        research_brief = state.get("research_brief", "")
+        topic = research_brief[:500] if research_brief else "Research findings"
+        print(f"[SAFEGUARDED] ⚠️ No user query found, using brief as topic")
 
     # Get config parameters
     batch_size = getattr(configurable, 'safeguarded_batch_size', BATCH_SIZE)
