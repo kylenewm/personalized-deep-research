@@ -92,8 +92,10 @@ class HybridReport:
 # Stage 1: Batched Pointer Extraction
 # =============================================================================
 
-BATCH_SIZE = 10  # Sources per batch (smaller for better extraction)
-MAX_CHARS_PER_SOURCE = 5000  # More content per source for better matching
+BATCH_SIZE = 1  # Process one source at a time for thoroughness
+MAX_CHARS_PER_SOURCE = 50000  # Send full source content (models have 128k context)
+CHUNK_SIZE = 100000  # Effectively disabled - only chunk if > 100k chars
+CHUNK_THRESHOLD = 100000  # Effectively disabled - almost no sources are this large
 DEFAULT_MIN_SCORE = 0.3  # Lower threshold - need 30% of keywords to match
 
 
@@ -105,6 +107,95 @@ def batch_sources(sources: Dict[str, dict], batch_size: int = BATCH_SIZE) -> Lis
         batch = dict(items[i:i + batch_size])
         batches.append(batch)
     return batches
+
+
+def chunk_content(content: str, chunk_size: int = CHUNK_SIZE) -> List[str]:
+    """Split content into chunks, trying to break at paragraph boundaries."""
+    if len(content) <= chunk_size:
+        return [content]
+
+    chunks = []
+    start = 0
+    while start < len(content):
+        end = start + chunk_size
+        if end >= len(content):
+            chunks.append(content[start:])
+            break
+
+        # Try to break at paragraph boundary
+        para_break = content.rfind('\n\n', start, end)
+        if para_break > start + chunk_size // 2:
+            end = para_break
+        else:
+            # Try sentence boundary
+            sent_break = content.rfind('. ', start, end)
+            if sent_break > start + chunk_size // 2:
+                end = sent_break + 1
+
+        chunks.append(content[start:end])
+        start = end
+
+    return chunks
+
+
+async def extract_from_source_chunked(
+    source_id: str,
+    source: dict,
+    topic: str,
+    llm_call,
+    min_score: float = DEFAULT_MIN_SCORE
+) -> List[Extraction]:
+    """Extract from a single source, chunking if needed for thoroughness."""
+    import asyncio
+
+    content = source.get("content", "") or source.get("raw_content", "")
+    if not content:
+        return []
+
+    chunks = chunk_content(content, CHUNK_SIZE)
+
+    # Question-aware extraction prompt
+    chunk_prompt_template = '''Research question: {topic}
+
+A fact is a specific, verifiable claim. Examples:
+- "Model X has 150ms latency" ✓
+- "Pricing starts at $0.01 per 1000 chars" ✓
+- "The API supports 50 languages" ✓
+- "This is where things get interesting" ✗ (intro fluff)
+- "Best for enterprise use" ✗ (opinion without evidence)
+
+Extract facts that help answer the research question. For each, output 3-5 unique keywords:
+
+Text:
+{chunk}
+
+Output JSON array (empty [] if no facts):
+[{{"keywords": ["Model", "X", "150ms", "latency"]}}]'''
+
+    async def extract_chunk(chunk_text):
+        prompt = chunk_prompt_template.format(topic=topic, chunk=chunk_text)
+        response = await llm_call(prompt)
+        return parse_pointer_response(response)
+
+    # Extract from all chunks in parallel
+    chunk_results = await asyncio.gather(*[extract_chunk(c) for c in chunks])
+
+    # Combine all pointers
+    all_pointers = []
+    for pointers in chunk_results:
+        for p in pointers:
+            # Add source_id since chunk prompt doesn't include it
+            p.source_id = source_id
+            all_pointers.append(p)
+
+    # Verify against full source content
+    source_dict = {source_id: source}
+    extractions = []
+    for pointer in all_pointers:
+        result = extract_from_pointer(pointer, source_dict, min_score=min_score)
+        extractions.append(result)
+
+    return extractions
 
 
 async def extract_batch(
@@ -124,7 +215,19 @@ async def extract_batch(
     Returns:
         List of Extraction results
     """
-    # Format sources for prompt
+    import asyncio
+
+    # For single-source batches with large content, use chunked extraction
+    # Only chunk if content exceeds threshold (saves cost for smaller sources)
+    if len(batch) == 1:
+        source_id, source = list(batch.items())[0]
+        content = source.get("content", "") or source.get("raw_content", "")
+        if len(content) > CHUNK_THRESHOLD:
+            return await extract_from_source_chunked(
+                source_id, source, topic, llm_call, min_score
+            )
+
+    # Standard batch extraction for small content or multi-source batches
     formatted = format_sources_for_prompt(batch, max_chars=MAX_CHARS_PER_SOURCE)
     prompt = POINTER_PROMPT.format(sources=formatted, topic=topic)
 
@@ -211,17 +314,15 @@ def normalize_for_comparison(text: str) -> str:
 
 def deduplicate_extractions(
     extractions: List[Extraction],
-    similarity_threshold: float = 0.4
+    similarity_threshold: float = 0.5
 ) -> List[Extraction]:
-    """Remove near-duplicate extractions.
+    """Remove near-duplicate extractions based on content similarity.
 
-    Two-pass deduplication:
-    1. Per-source: Keep only best extraction per source (prevents same source duplicates)
-    2. Cross-source: Remove semantically similar extractions across different sources
+    Keeps multiple facts from the same source - only removes actual duplicate content.
 
     Args:
         extractions: List of verified extractions
-        similarity_threshold: Jaccard similarity above which to consider duplicate (lowered to 0.4)
+        similarity_threshold: Jaccard similarity above which to consider duplicate
 
     Returns:
         Deduplicated list (keeps higher-scoring extraction when duplicates found)
@@ -229,23 +330,16 @@ def deduplicate_extractions(
     if not extractions:
         return []
 
-    # Sort by match_score descending (keep best version)
+    # Sort by match_score descending (keep best version when duplicates found)
     sorted_ext = sorted(extractions, key=lambda x: x.match_score, reverse=True)
 
-    # Pass 1: One extraction per source (fixes issue #4)
-    seen_sources = set()
-    source_deduped = []
+    # Semantic deduplication - remove actually duplicate content
+    # (same or very similar text, regardless of source)
+    kept = []
     for ext in sorted_ext:
         if not ext.extracted_text:
             continue
-        source_id = ext.pointer.source_id
-        if source_id not in seen_sources:
-            source_deduped.append(ext)
-            seen_sources.add(source_id)
 
-    # Pass 2: Cross-source semantic deduplication (fixes issue #3)
-    kept = []
-    for ext in source_deduped:
         # Normalize for comparison
         ext_normalized = normalize_for_comparison(ext.extracted_text)
 

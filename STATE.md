@@ -4,84 +4,85 @@
 
 Deep Research Agent — AI-powered research agent that searches the web, gathers sources, and generates verified research reports with anti-hallucination verification.
 
-## Current Priorities
+## Current Status
 
-1. [x] All CRITICAL issues resolved (7/7)
-2. [x] All HIGH issues resolved (4/4)
-3. [x] Citation-First Evaluation implemented (deterministic approach)
+**Two fixes applied and validated. Ready to commit.**
 
-**COMPLETE:** 156 unit tests pass. All audit issues addressed. New citation-first metrics added.
+| Component | Status |
+|-----------|--------|
+| Per-source dedup limit | ✅ FIXED - was killing coverage |
+| Chunking | ✅ REMOVED - same coverage, 82% fewer LLM calls |
+| Extraction | ✅ Working - ~14 unique facts/source |
+| Arranger | ✅ VALIDATED - 73% exclusion is appropriate (filtering fluff) |
 
-## Key Decisions (Collaborative)
+## Fixes Applied This Session
 
-| Date | Decision | Why | Alternatives Rejected |
-|------|----------|-----|----------------------|
-| 2026-01-07 | Use STATE.md as single source of truth | Agents read one file, not many | Multiple scattered files |
-| 2026-01-07 | Append-only LOG.md | Preserves history, prevents context loss | Replace (loses history) |
-| 2026-01-07 | Skill for complex tasks, CLAUDE.md for always-on | Separation of always-on vs opt-in behavior | Everything in CLAUDE.md |
-| 2026-01-08 | Citation-first evaluation (deterministic) | Separates validity from coverage, no LLM extraction issues | RAGAS (doesn't handle numbered citations), LLM extraction (paraphrasing problem) |
+### Fix 1: Removed Per-Source Dedup Limit
 
-## Open Issues
+**Problem:** `deduplicate_extractions()` had "Pass 1" that kept only 1 fact per source.
 
-**CRITICAL (from 2026-01-07 audit):**
-- [x] Hallucination rate definition wrong (evaluation.py:645) — FIXED + unit tested (8 tests)
-- [x] Claim-to-citation matching broken (evaluation.py:195-240) — FIXED + unit tested (11 tests)
-- [x] Citation format mismatch (prompts.py vs evaluation.py) — FIXED + unit tested (10 tests)
-- [x] Dual source storage divergence (utils.py + researcher.py) — ANALYZED: not a bug, documented architecture
-- [x] Silent truncation at 3+ points — FIXED + unit tested (14 tests)
-- [x] LLM in "deterministic" claim gate — ANALYZED: not an I2 violation (I2 covers quote verification only)
-- [x] Tokenization breaks acronyms (verify.py:24-35) — FIXED + unit tested (4 tests)
+**Fix:** Removed per-source limit. Now only removes actual duplicate content.
 
-**HIGH:**
-- [x] Extract node may miss multi-paragraph quotes — FIXED: increased max_words 60→100 for consistency (3 tests)
-- [x] Round-robin diversity (extract.py:135) — ANALYZED: not a bug, IS enforced correctly (3 tests)
-- [x] Jaccard window off-by-one (verify.py:93) — ANALYZED: not a bug, added 4 edge case tests
-- [x] Vague claims auto-pass (claim_gate.py:86) — FIXED: track skipped claims + improved regex (20 tests)
+**Impact:** 16x more facts survive to downstream stages.
 
-**FOUND IN RE-AUDIT:**
-- [x] document_processing.py:286 still used max_words=60 — FIXED
-- [x] verify.py:171 returns {} when disabled (snippets stay PENDING) — FIXED: now marks as SKIP (2 tests)
+### Fix 2: Disabled Chunking
 
-See LOG.md for full 41-issue audit.
+**Problem:** Chunking created 3x more LLM calls for same coverage.
 
-## Current Test Strategy
+**Test results:**
+| Metric | WITH chunking | WITHOUT chunking |
+|--------|---------------|------------------|
+| Unique facts | 40 | 38 |
+| LLM calls | 17 | 3 |
 
-- Unit: pytest for individual nodes
-- Integration: scripts/test_e2e_quick.py for full pipeline
-- Manual: Run with test queries, verify citations
+**Fix:** Set `CHUNK_THRESHOLD = 100000` (effectively disabled).
 
-## New Metrics (Citation-First Evaluation)
+**Impact:** 82% fewer LLM calls, same coverage.
 
-Added deterministic metrics that don't rely on LLM claim extraction:
+## Arranger Validation
 
-| Metric | What it Measures | Formula |
-|--------|------------------|---------|
-| **Citation Validity** | Are our citations correct? | `valid_citations / (valid + invalid)` |
-| **Citation Coverage** | What % of sentences have citations? | `cited_sentences / total_sentences` |
+Investigated 73% exclusion rate. Exclusions are appropriate:
+- Marketing fluff ("cutting-edge", "leading platform")
+- Tutorial intros ("We have compiled...")
+- Generic statements without specific data
+- Industry background that doesn't answer the question
 
-These metrics are DETERMINISTIC (same input → same output) and separate validity from coverage.
+**Decision:** Keep current arranger behavior.
 
-## Next: Safeguarded Generation Architecture
+## Current Pipeline Settings
 
-**Problem:** Current evaluation measures issues but doesn't fix them. LLMs still synthesize/add uncited content during report generation.
+```python
+BATCH_SIZE = 1  # One source per call
+MAX_CHARS_PER_SOURCE = 50000  # Full source content
+CHUNK_THRESHOLD = 100000  # Effectively disabled
+```
 
-**Proposed Solution:** Locked Facts + Filler Generation
+## Cost Estimate
 
-| Component | What LLM Can Do | Hallucination Risk |
-|-----------|-----------------|-------------------|
-| Verified Findings | Nothing (immutable) | Zero |
-| Body Facts | Arrange order only | Zero |
-| Filler Text | Generate transitions | Low (not factual) |
-| Synthesis Section | Free generation | Accepted (marked) |
+| Sources | Old (chunking) | New (no chunking) |
+|---------|----------------|-------------------|
+| 216 | ~$1.64 | ~$0.30 |
+| 400 | ~$3.00 | ~$0.55 |
 
-**Key Insight:** Separate VERIFIED (locked) from GENERATED (filler). LLM fills gaps between immutable facts.
+## Files Changed (Ready to Commit)
 
-**Status:** Idea captured in LOG.md. Not yet implemented.
+- `src/open_deep_research/pipeline_v2.py`
+  - Removed per-source dedup limit in `deduplicate_extractions()`
+  - Disabled chunking (CHUNK_THRESHOLD = 100000)
 
-## Blockers
+## Next Steps
 
-None.
+1. **Commit fixes** ← READY
+
+## Already Tried (Don't Repeat)
+
+| Approach | Result | Why It Failed |
+|----------|--------|---------------|
+| Regex blocklist (50+ patterns) | Fragile | Whack-a-mole, overfitting |
+| Keyword blocklist for garbage | Incomplete | Not generalizable |
+| Chunking for "thoroughness" | Wasteful | Same coverage, 3x cost |
+| Per-source dedup limit | Killed coverage | Threw away 95% of facts |
 
 ## Last Updated
 
-2026-01-08 — Citation-first evaluation implemented. 156 unit tests pass.
+2026-01-10 — Fixes validated, ready to commit.
