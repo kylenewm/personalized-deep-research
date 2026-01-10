@@ -134,6 +134,26 @@ class Configuration(BaseModel):
             }
         }
     )
+    blocked_domains: List[str] = Field(
+        default=[
+            "youtube.com", "youtu.be",
+            "reddit.com",
+            "quora.com",
+            "tiktok.com",
+            "twitter.com", "x.com",
+            "facebook.com",
+            "instagram.com",
+            "linkedin.com",
+            "pinterest.com",
+        ],
+        metadata={
+            "x_oap_ui_config": {
+                "type": "text",
+                "default": "youtube.com,reddit.com,quora.com,tiktok.com,twitter.com,x.com",
+                "description": "Comma-separated list of domains to block from search results (e.g., youtube.com,reddit.com). These sources typically contain low-quality or user-generated content."
+            }
+        }
+    )
     max_researcher_iterations: int = Field(
         default=6,
         metadata={

@@ -38,6 +38,43 @@ from open_deep_research.prompts import (
 from open_deep_research.state import ResearchComplete, Summary, SourceRecord, BriefContext
 
 ##########################
+# Domain Filtering
+##########################
+
+def is_blocked_domain(url: str, blocked_domains: List[str]) -> bool:
+    """Check if a URL belongs to a blocked domain.
+
+    Args:
+        url: The URL to check
+        blocked_domains: List of domain patterns to block (e.g., ["youtube.com", "reddit.com"])
+
+    Returns:
+        True if the URL should be blocked, False otherwise
+    """
+    if not blocked_domains:
+        return False
+
+    try:
+        from urllib.parse import urlparse
+        parsed = urlparse(url)
+        domain = parsed.netloc.lower()
+
+        # Remove www. prefix for matching
+        if domain.startswith("www."):
+            domain = domain[4:]
+
+        # Check against blocked domains
+        for blocked in blocked_domains:
+            blocked = blocked.lower().strip()
+            # Match exact domain or subdomain (e.g., "m.youtube.com" matches "youtube.com")
+            if domain == blocked or domain.endswith("." + blocked):
+                return True
+        return False
+    except Exception:
+        return False
+
+
+##########################
 # Source Storage Utils
 ##########################
 
@@ -207,7 +244,19 @@ async def tavily_search(
     
     # Step 3: Set up the summarization model with configuration
     configurable = Configuration.from_runnable_config(config)
-    
+
+    # Step 3.5: Filter out blocked domains (e.g., YouTube, Reddit, Quora)
+    blocked_domains = getattr(configurable, 'blocked_domains', [])
+    if blocked_domains:
+        pre_filter_count = len(unique_results)
+        unique_results = {
+            url: data for url, data in unique_results.items()
+            if not is_blocked_domain(url, blocked_domains)
+        }
+        blocked_count = pre_filter_count - len(unique_results)
+        if blocked_count > 0:
+            print(f"[SEARCH] Filtered {blocked_count} results from blocked domains")
+
     # Character limit to stay within model token limits (configurable)
     max_char_to_include = configurable.max_content_length
     
