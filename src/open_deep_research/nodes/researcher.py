@@ -1,7 +1,12 @@
 """Researcher nodes and subgraph for the Deep Research agent."""
 
 import asyncio
+import json
 import logging
+import os
+import re
+from datetime import datetime
+from pathlib import Path
 from typing import Literal
 
 from langchain_core.messages import (
@@ -20,6 +25,7 @@ from open_deep_research.prompts import (
     compress_research_simple_human_message,
     compress_research_system_prompt,
     research_system_prompt,
+    SOURCE_QUALITY_GUIDANCE_RESEARCHER,
 )
 from open_deep_research.state import ResearcherOutputState, ResearcherState
 from open_deep_research.utils import (
@@ -32,13 +38,94 @@ from open_deep_research.utils import (
     is_token_limit_exceeded,
     openai_websearch_called,
     remove_up_to_last_ai_message,
+    retry_with_backoff,
 )
+
+# Trace instrumentation for researcher sandbox
+TRACE_ENABLED = os.getenv("RESEARCH_TRACE_ENABLED", "").lower() == "true"
+TRACE_DIR = Path(__file__).parent.parent.parent.parent / "tests/fixtures/research_traces"
+
+# Active trace state (per-session)
+_active_trace = None
+
+
+def init_trace(query: str) -> None:
+    """Initialize a new research trace."""
+    global _active_trace
+    if not TRACE_ENABLED:
+        return
+
+    TRACE_DIR.mkdir(parents=True, exist_ok=True)
+    _active_trace = {
+        "query": query,
+        "timestamp": datetime.now().isoformat(),
+        "iterations": []
+    }
+
+
+def log_iteration(iteration: int, queries: list, facts_found: list) -> None:
+    """Log a research iteration to the active trace."""
+    global _active_trace
+    if not TRACE_ENABLED or _active_trace is None:
+        return
+
+    _active_trace["iterations"].append({
+        "iteration": iteration,
+        "search_queries": queries,
+        "facts_found": facts_found,
+        "fact_count": len(facts_found)
+    })
+
+
+def save_trace() -> str | None:
+    """Save the active trace to disk and return the path."""
+    global _active_trace
+    if not TRACE_ENABLED or _active_trace is None:
+        return None
+
+    trace_path = TRACE_DIR / f"trace_{datetime.now().strftime('%Y%m%d_%H%M%S')}.json"
+    with open(trace_path, 'w') as f:
+        json.dump(_active_trace, f, indent=2)
+
+    logging.info(f"[TRACE] Saved research trace to {trace_path}")
+    _active_trace = None
+    return str(trace_path)
+
+
+def extract_facts_from_tool_output(content: str) -> list:
+    """Extract fact-like sentences from tool output for trace analysis."""
+    if not isinstance(content, str):
+        return []
+
+    # Extract sentences that look like facts (contain specific information)
+    facts = []
+    sentences = re.split(r'[.!?]\s+', content)
+
+    for sentence in sentences:
+        sentence = sentence.strip()
+        # Skip very short or very long sentences
+        if len(sentence) < 20 or len(sentence) > 500:
+            continue
+        # Skip meta-text
+        if any(skip in sentence.lower() for skip in [
+            'source', 'url:', 'http', 'summary:', '---', '==='
+        ]):
+            continue
+        # Keep sentences with numbers, dates, or specific entities
+        if re.search(r'\d|%|million|billion|trillion', sentence, re.IGNORECASE):
+            facts.append(sentence[:200])  # Truncate for storage
+
+    return facts[:50]  # Limit facts per iteration
 
 
 async def execute_tool_safely(tool, args, config):
-    """Safely execute a tool with error handling."""
+    """Safely execute a tool with error handling and retry on rate limits."""
     try:
-        return await tool.ainvoke(args, config)
+        return await retry_with_backoff(
+            lambda: tool.ainvoke(args, config),
+            max_retries=5,
+            base_delay=2.0
+        )
     except Exception as e:
         return f"Error executing tool: {str(e)}"
 
@@ -61,6 +148,10 @@ async def researcher(state: ResearcherState, config: RunnableConfig) -> Command[
     configurable = Configuration.from_runnable_config(config)
     researcher_messages = state.get("researcher_messages", [])
 
+    # Initialize trace on first iteration
+    if state.get("tool_call_iterations", 0) == 0:
+        init_trace(state.get("research_topic", "unknown"))
+
     # Get all available research tools (search, MCP, think_tool)
     tools = await get_all_tools(config)
     if len(tools) == 0:
@@ -77,10 +168,16 @@ async def researcher(state: ResearcherState, config: RunnableConfig) -> Command[
         "tags": ["langsmith:nostream"]
     }
 
-    # Prepare system prompt with MCP context if available
+    # Prepare system prompt with MCP context and quality guidance if applicable
+    # Source quality guidance is injected when trust_level=high
+    quality_guidance = ""
+    if getattr(configurable, 'trust_level', 'med') == 'high':
+        quality_guidance = SOURCE_QUALITY_GUIDANCE_RESEARCHER
+
     researcher_prompt = research_system_prompt.format(
         mcp_prompt=configurable.mcp_prompt or "",
-        date=get_today_str()
+        date=get_today_str(),
+        source_quality_guidance=quality_guidance
     )
 
     # Configure model with tools, retry logic, and settings
@@ -151,6 +248,19 @@ async def researcher_tools(state: ResearcherState, config: RunnableConfig) -> Co
 
     # Execute all tool calls in parallel
     tool_calls = most_recent_message.tool_calls
+
+    # Log what searches are being executed for visibility
+    for tc in tool_calls:
+        tool_name = tc["name"]
+        if tool_name == "tavily_search":
+            queries = tc["args"].get("queries", [])
+            if queries:
+                print(f"[SEARCH] {len(queries)} queries: {queries[0][:50]}...")
+        elif tool_name == "think_tool":
+            pass  # Silent for think_tool
+        else:
+            print(f"[TOOL] Calling: {tool_name}")
+
     tool_execution_tasks = [
         execute_tool_safely(tools_by_name[tool_call["name"]], tool_call["args"], config)
         for tool_call in tool_calls
@@ -167,6 +277,20 @@ async def researcher_tools(state: ResearcherState, config: RunnableConfig) -> Co
         for observation, tool_call in zip(observations, tool_calls)
     ]
 
+    # Log iteration for trace analysis
+    search_queries = []
+    all_facts = []
+    for tc, obs in zip(tool_calls, observations):
+        if tc["name"] == "tavily_search":
+            search_queries.extend(tc["args"].get("queries", []))
+        if isinstance(obs, str):
+            all_facts.extend(extract_facts_from_tool_output(obs))
+    log_iteration(
+        iteration=state.get("tool_call_iterations", 0),
+        queries=search_queries,
+        facts_found=all_facts
+    )
+
     # Step 3: Check late exit conditions (after processing tools, use effective values for test mode)
     exceeded_iterations = state.get("tool_call_iterations", 0) >= configurable.get_effective_max_react_tool_calls()
     research_complete_called = any(
@@ -175,6 +299,8 @@ async def researcher_tools(state: ResearcherState, config: RunnableConfig) -> Co
     )
 
     if exceeded_iterations or research_complete_called:
+        # Save trace before ending research
+        save_trace()
         # End research and proceed to compression
         return Command(
             goto="compress_research",

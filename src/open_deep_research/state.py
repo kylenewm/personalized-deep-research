@@ -157,7 +157,8 @@ class AgentState(MessagesState):
     raw_notes: Annotated[list[str], override_reducer] = []
     notes: Annotated[list[str], override_reducer] = []
     final_report: str
-    
+    hybrid_report: Optional[dict] = None  # Structured report data for re-rendering
+
     # Council tracking fields
     council_revision_count: int = 0
     feedback_on_brief: Annotated[list[str], override_reducer] = []

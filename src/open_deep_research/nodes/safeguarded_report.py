@@ -24,9 +24,11 @@ from open_deep_research.state import AgentState
 from open_deep_research.pipeline_v2 import (
     run_pipeline_v2,
     render_hybrid_report,
+    HybridReport,
     BATCH_SIZE,
     DEFAULT_MIN_SCORE,
 )
+from open_deep_research.render import report_to_dict
 
 
 async def safeguarded_report_generation(state: AgentState, config: RunnableConfig) -> dict:
@@ -130,11 +132,16 @@ async def safeguarded_report_generation(state: AgentState, config: RunnableConfi
         )
 
         # Render as markdown
+        print(f"[SAFEGUARDED:RENDER] Rendering report...")
         final_report = render_hybrid_report(report, use_color=True)
 
-        print(f"[SAFEGUARDED] ✓ Report generated: {report.verified_count} verified facts in {len(report.sections)} themes")
+        print(f"[SAFEGUARDED] ✓ Complete: {report.verified_count} facts, {len(report.sections)} themes, {len(final_report)} chars")
 
-        return {"final_report": final_report}
+        # Save both rendered report and structured data for re-rendering
+        return {
+            "final_report": final_report,
+            "hybrid_report": report_to_dict(report),
+        }
 
     except Exception as e:
         logging.exception(f"[SAFEGUARDED] Pipeline failed: {e}")

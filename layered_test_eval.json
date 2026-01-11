@@ -1,0 +1,412 @@
+{
+  "run_id": "20260107_205846",
+  "query": "",
+  "eval_timestamp": "2026-01-07T20:58:46.491389",
+  "claims": {
+    "total": 30,
+    "true_count": 0,
+    "false_count": 0,
+    "unverifiable_count": 30,
+    "uncited_count": 0,
+    "hallucination_rate": 0.0,
+    "grounding_rate": 0.0
+  },
+  "citations": {
+    "total": 44,
+    "valid": 0,
+    "supported": 0,
+    "accuracy": 0.0,
+    "unique_sources": 20
+  },
+  "verified_findings": {
+    "quotes": 5,
+    "all_pass": false,
+    "source_diversity": 0,
+    "error": null
+  },
+  "per_claim": [
+    {
+      "claim_id": "c001",
+      "claim_text": "As of 2026, 23% of respondents reported having a corporate-wide AI strategy in place, which is an increase of 15 percentage points compared to the previous year's survey.",
+      "citations": [
+        2
+      ],
+      "is_uncited": false,
+      "status": "UNVERIFIABLE",
+      "confidence": 0.0,
+      "sources_checked": [],
+      "evidence_snippet": null
+    },
+    {
+      "claim_id": "c002",
+      "claim_text": "The Chinese open-source AI model DeepSeek-V3.2 scored 99.2% on elite math tests, rivaling GPT-5 in reasoning and math capabilities.",
+      "citations": [
+        2
+      ],
+      "is_uncited": false,
+      "status": "UNVERIFIABLE",
+      "confidence": 0.0,
+      "sources_checked": [],
+      "evidence_snippet": null
+    },
+    {
+      "claim_id": "c003",
+      "claim_text": "In 2025, AI systems were more integrated into decision-making pipelines, causing alignment failures to cascade into business, social, or safety risks.",
+      "citations": [
+        2
+      ],
+      "is_uncited": false,
+      "status": "UNVERIFIABLE",
+      "confidence": 0.0,
+      "sources_checked": [],
+      "evidence_snippet": null
+    },
+    {
+      "claim_id": "c004",
+      "claim_text": "In 2023, at least 30 AI-related laws were passed worldwide, according to the Artificial Intelligence Index Report 2025 by Stanford University researchers.",
+      "citations": [
+        2
+      ],
+      "is_uncited": false,
+      "status": "UNVERIFIABLE",
+      "confidence": 0.0,
+      "sources_checked": [],
+      "evidence_snippet": null
+    },
+    {
+      "claim_id": "c005",
+      "claim_text": "OpenAI's GPT-5 family and DeepSeek-V3.2 demonstrated exceptional performance on complex scientific tasks and elite mathematics assessments in 2025 while significantly reducing operational costs.",
+      "citations": [
+        2
+      ],
+      "is_uncited": false,
+      "status": "UNVERIFIABLE",
+      "confidence": 0.0,
+      "sources_checked": [],
+      "evidence_snippet": null
+    },
+    {
+      "claim_id": "c006",
+      "claim_text": "Chinese startup DeepSeek released an AI model in late 2025 that rivals GPT-5 and allows debugging without requiring internet access.",
+      "citations": [
+        2
+      ],
+      "is_uncited": false,
+      "status": "UNVERIFIABLE",
+      "confidence": 0.0,
+      "sources_checked": [],
+      "evidence_snippet": null
+    },
+    {
+      "claim_id": "c007",
+      "claim_text": "In December 2025, the White House issued Executive Order 14365 to establish a unified national AI policy framework to prevent inconsistent state-level regulations.",
+      "citations": [
+        1
+      ],
+      "is_uncited": false,
+      "status": "UNVERIFIABLE",
+      "confidence": 0.0,
+      "sources_checked": [],
+      "evidence_snippet": null
+    },
+    {
+      "claim_id": "c008",
+      "claim_text": "More than 100 AI-related state laws were passed in the United States in 2025, covering areas such as consumer protection and election integrity.",
+      "citations": [
+        10
+      ],
+      "is_uncited": false,
+      "status": "UNVERIFIABLE",
+      "confidence": 0.0,
+      "sources_checked": [],
+      "evidence_snippet": null
+    },
+    {
+      "claim_id": "c009",
+      "claim_text": "The NIST AI Risk Management Framework (AI RMF), updated in 2024/2025, provides a sector-neutral, risk-based structure for AI risk governance and aligns with international standards.",
+      "citations": [
+        21
+      ],
+      "is_uncited": false,
+      "status": "UNVERIFIABLE",
+      "confidence": 0.0,
+      "sources_checked": [],
+      "evidence_snippet": null
+    },
+    {
+      "claim_id": "c010",
+      "claim_text": "The EU AI Act (Regulation (EU) 2024/1689) became effective with a staged risk-based approach, including immediate bans on unacceptable-risk AI practices like manipulative social scoring.",
+      "citations": [
+        5,
+        7
+      ],
+      "is_uncited": false,
+      "status": "UNVERIFIABLE",
+      "confidence": 0.0,
+      "sources_checked": [],
+      "evidence_snippet": null
+    },
+    {
+      "claim_id": "c011",
+      "claim_text": "High-risk AI system regulations under the EU AI Act will become effective by August 2026 and 2027 in sectors such as critical infrastructure and law enforcement.",
+      "citations": [
+        5,
+        7
+      ],
+      "is_uncited": false,
+      "status": "UNVERIFIABLE",
+      "confidence": 0.0,
+      "sources_checked": [],
+      "evidence_snippet": null
+    },
+    {
+      "claim_id": "c012",
+      "claim_text": "The European Commission published the GPAI Code of Practice in July 2025 and draft standards for watermarking and labeling AI-generated content in December 2025.",
+      "citations": [
+        9,
+        5,
+        7
+      ],
+      "is_uncited": false,
+      "status": "UNVERIFIABLE",
+      "confidence": 0.0,
+      "sources_checked": [],
+      "evidence_snippet": null
+    },
+    {
+      "claim_id": "c013",
+      "claim_text": "Penalties for noncompliance with the EU AI Act can reach up to \u20ac35 million or 7% of global turnover.",
+      "citations": [
+        9,
+        5,
+        7
+      ],
+      "is_uncited": false,
+      "status": "UNVERIFIABLE",
+      "confidence": 0.0,
+      "sources_checked": [],
+      "evidence_snippet": null
+    },
+    {
+      "claim_id": "c014",
+      "claim_text": "Amendments to China's Cybersecurity Law took effect in January 2026, incorporating AI as a core element of digital governance and increasing fines for violations.",
+      "citations": [
+        16,
+        15
+      ],
+      "is_uncited": false,
+      "status": "UNVERIFIABLE",
+      "confidence": 0.0,
+      "sources_checked": [],
+      "evidence_snippet": null
+    },
+    {
+      "claim_id": "c015",
+      "claim_text": "China's new draft regulations target AI services simulating human interactions, requiring safety warnings, addiction monitoring, and prohibiting content threatening national security.",
+      "citations": [
+        18
+      ],
+      "is_uncited": false,
+      "status": "UNVERIFIABLE",
+      "confidence": 0.0,
+      "sources_checked": [],
+      "evidence_snippet": null
+    },
+    {
+      "claim_id": "c016",
+      "claim_text": "The World Health Organization and South Korea\u2019s MFDS hosted the AIRIS 2025 symposium focused on AI regulation for health and ethical AI deployment.",
+      "citations": [
+        27
+      ],
+      "is_uncited": false,
+      "status": "UNVERIFIABLE",
+      "confidence": 0.0,
+      "sources_checked": [],
+      "evidence_snippet": null
+    },
+    {
+      "claim_id": "c017",
+      "claim_text": "The Bank for International Settlements, OECD, and G7 are working on improving AI monitoring, transparency, and cyber-defenses in financial and health sectors.",
+      "citations": [
+        24,
+        19
+      ],
+      "is_uncited": false,
+      "status": "UNVERIFIABLE",
+      "confidence": 0.0,
+      "sources_checked": [],
+      "evidence_snippet": null
+    },
+    {
+      "claim_id": "c018",
+      "claim_text": "Anthropic received the highest grade (C+) in the Future of Life Institute\u2019s 2025 AI Safety Index, particularly for privacy and alignment efforts.",
+      "citations": [
+        9,
+        23
+      ],
+      "is_uncited": false,
+      "status": "UNVERIFIABLE",
+      "confidence": 0.0,
+      "sources_checked": [],
+      "evidence_snippet": null
+    },
+    {
+      "claim_id": "c019",
+      "claim_text": "None of the leading AI companies demonstrated sufficient readiness for existential risks according to the 2025 AI Safety Index.",
+      "citations": [
+        9
+      ],
+      "is_uncited": false,
+      "status": "UNVERIFIABLE",
+      "confidence": 0.0,
+      "sources_checked": [],
+      "evidence_snippet": null
+    },
+    {
+      "claim_id": "c020",
+      "claim_text": "Only three firms conducted robust testing for catastrophic bio-risk and cyber-risk exposures as per the 2025 AI Safety Index.",
+      "citations": [
+        9
+      ],
+      "is_uncited": false,
+      "status": "UNVERIFIABLE",
+      "confidence": 0.0,
+      "sources_checked": [],
+      "evidence_snippet": null
+    },
+    {
+      "claim_id": "c021",
+      "claim_text": "The NIST AI RMF, ISO/IEC 42001, and the Cloud Security Alliance AI Controls Matrix are widely adopted standards for AI risk management and compliance as of 2025.",
+      "citations": [
+        21,
+        22
+      ],
+      "is_uncited": false,
+      "status": "UNVERIFIABLE",
+      "confidence": 0.0,
+      "sources_checked": [],
+      "evidence_snippet": null
+    },
+    {
+      "claim_id": "c022",
+      "claim_text": "Executives reported in 2025 that relying solely on single metrics for AI alignment is a recognized pitfall, recommending multidisciplinary planning and collaboration instead.",
+      "citations": [
+        14
+      ],
+      "is_uncited": false,
+      "status": "UNVERIFIABLE",
+      "confidence": 0.0,
+      "sources_checked": [],
+      "evidence_snippet": null
+    },
+    {
+      "claim_id": "c023",
+      "claim_text": "Agentic AI systems that can plan, reason, and act across networks are a dominant trend as of 2026, with improvements in self-verification reducing reliance on human intervention.",
+      "citations": [
+        4
+      ],
+      "is_uncited": false,
+      "status": "UNVERIFIABLE",
+      "confidence": 0.0,
+      "sources_checked": [],
+      "evidence_snippet": null
+    },
+    {
+      "claim_id": "c024",
+      "claim_text": "Studies in 2025 found that widely used large language models are unsafe for general-purpose physical robots, especially in interactions with vulnerable individuals.",
+      "citations": [
+        11
+      ],
+      "is_uncited": false,
+      "status": "UNVERIFIABLE",
+      "confidence": 0.0,
+      "sources_checked": [],
+      "evidence_snippet": null
+    },
+    {
+      "claim_id": "c025",
+      "claim_text": "The EU AI Act requires mandatory transparency, human oversight, risk assessments, and cybersecurity for high-risk and general-purpose AI systems.",
+      "citations": [
+        5,
+        7
+      ],
+      "is_uncited": false,
+      "status": "UNVERIFIABLE",
+      "confidence": 0.0,
+      "sources_checked": [],
+      "evidence_snippet": null
+    },
+    {
+      "claim_id": "c026",
+      "claim_text": "The Future of Life Institute\u2019s 2025 AI Safety Index found US and Chinese companies lag behind the EU in regulatory compliance and existential safety practices.",
+      "citations": [
+        9
+      ],
+      "is_uncited": false,
+      "status": "UNVERIFIABLE",
+      "confidence": 0.0,
+      "sources_checked": [],
+      "evidence_snippet": null
+    },
+    {
+      "claim_id": "c027",
+      "claim_text": "China\u2019s AI regulatory approach is incremental and sector-specific, focusing on pilot projects and technical standards rather than a comprehensive AI law.",
+      "citations": [
+        17
+      ],
+      "is_uncited": false,
+      "status": "UNVERIFIABLE",
+      "confidence": 0.0,
+      "sources_checked": [],
+      "evidence_snippet": null
+    },
+    {
+      "claim_id": "c028",
+      "claim_text": "The European Commission is considering delaying main enforcement deadlines of the EU AI Act to December 2027 as technical standards are finalized.",
+      "citations": [
+        9,
+        5,
+        7
+      ],
+      "is_uncited": false,
+      "status": "UNVERIFIABLE",
+      "confidence": 0.0,
+      "sources_checked": [],
+      "evidence_snippet": null
+    },
+    {
+      "claim_id": "c029",
+      "claim_text": "By 2025, agentic AI models introduced new risks such as 'insider threat' and agentic misalignment where models act contrary to oversight intentions.",
+      "citations": [
+        8,
+        4
+      ],
+      "is_uncited": false,
+      "status": "UNVERIFIABLE",
+      "confidence": 0.0,
+      "sources_checked": [],
+      "evidence_snippet": null
+    },
+    {
+      "claim_id": "c030",
+      "claim_text": "Detection of 'evaluation awareness' in advanced models like Claude Sonnet 4.5 complicates reliable AI safety benchmarking and identification of undesirable intent.",
+      "citations": [
+        8
+      ],
+      "is_uncited": false,
+      "status": "UNVERIFIABLE",
+      "confidence": 0.0,
+      "sources_checked": [],
+      "evidence_snippet": null
+    }
+  ],
+  "warnings": [
+    "Grounding rate (0.0%) below 85% target"
+  ],
+  "cost_estimate": {
+    "extraction_calls": 1,
+    "verification_calls": 30,
+    "embedding_calls": 0,
+    "estimated_cost_usd": 0.16
+  }
+}

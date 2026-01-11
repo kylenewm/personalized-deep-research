@@ -38,6 +38,74 @@ from open_deep_research.prompts import (
 from open_deep_research.state import ResearchComplete, Summary, SourceRecord, BriefContext
 
 ##########################
+# Rate Limit Retry Logic
+##########################
+
+logger = logging.getLogger(__name__)
+
+
+async def retry_with_backoff(
+    func,
+    max_retries: int = 3,
+    base_delay: float = 1.0,
+    max_delay: float = 30.0,
+    on_retry: callable = None
+):
+    """Retry async function with exponential backoff on rate limit errors.
+
+    Args:
+        func: Async callable to retry
+        max_retries: Maximum number of retry attempts
+        base_delay: Initial delay in seconds (doubles each retry)
+        max_delay: Maximum delay cap
+        on_retry: Optional callback(attempt, delay, error) called before each retry
+
+    Returns:
+        Result of func() on success
+
+    Raises:
+        Last exception if all retries exhausted
+    """
+    last_exception = None
+
+    for attempt in range(max_retries + 1):
+        try:
+            return await func()
+        except Exception as e:
+            # Check exception type first (most reliable)
+            error_type = type(e).__name__.lower()
+            error_str = str(e).lower()
+
+            is_rate_limit = (
+                'ratelimit' in error_type or
+                'rate_limit' in error_str or
+                'rate limit' in error_str or
+                '429' in error_str or
+                'too many requests' in error_str or
+                'quota' in error_str or
+                'tokens per min' in error_str or
+                'tpm' in error_str
+            )
+
+            if not is_rate_limit or attempt == max_retries:
+                raise
+
+            last_exception = e
+            delay = min(base_delay * (2 ** attempt), max_delay)
+
+            if on_retry:
+                on_retry(attempt + 1, delay, e)
+            else:
+                # Log with print for immediate visibility
+                print(f"[RETRY] Rate limit hit, waiting {delay:.1f}s (attempt {attempt + 1}/{max_retries})")
+                logger.warning(f"Rate limit hit, retrying in {delay:.1f}s (attempt {attempt + 1}/{max_retries})")
+
+            await asyncio.sleep(delay)
+
+    raise last_exception
+
+
+##########################
 # Domain Filtering
 ##########################
 
@@ -72,6 +140,29 @@ def is_blocked_domain(url: str, blocked_domains: List[str]) -> bool:
         return False
     except Exception:
         return False
+
+
+def extract_domain(url: str) -> str:
+    """Extract the root domain from a URL for per-domain limiting.
+
+    Args:
+        url: The URL to extract the domain from
+
+    Returns:
+        Root domain (e.g., "github.com" from "https://docs.github.com/en/...")
+    """
+    try:
+        from urllib.parse import urlparse
+        parsed = urlparse(url)
+        domain = parsed.netloc.lower()
+
+        # Remove www. prefix
+        if domain.startswith("www."):
+            domain = domain[4:]
+
+        return domain
+    except Exception:
+        return "unknown"
 
 
 ##########################
@@ -233,7 +324,11 @@ async def tavily_search(
         include_raw_content=True,
         config=config
     )
-    
+
+    # Log search completion
+    total_results = sum(len(r.get('results', [])) for r in search_results)
+    print(f"[SEARCH] ✓ {len(queries)} queries returned {total_results} results")
+
     # Step 2: Deduplicate results by URL to avoid processing the same content multiple times
     unique_results = {}
     for response in search_results:
@@ -256,6 +351,31 @@ async def tavily_search(
         blocked_count = pre_filter_count - len(unique_results)
         if blocked_count > 0:
             print(f"[SEARCH] Filtered {blocked_count} results from blocked domains")
+
+    # Step 3.6: Enforce per-domain limit to prevent echo chamber effect
+    max_per_domain = getattr(configurable, 'max_sources_per_domain', 3)
+    if max_per_domain > 0:
+        domain_counts: Dict[str, int] = {}
+        filtered_results = {}
+        dropped_domains: Dict[str, int] = {}
+
+        for url, data in unique_results.items():
+            domain = extract_domain(url)
+            current_count = domain_counts.get(domain, 0)
+
+            if current_count < max_per_domain:
+                filtered_results[url] = data
+                domain_counts[domain] = current_count + 1
+            else:
+                dropped_domains[domain] = dropped_domains.get(domain, 0) + 1
+
+        dropped_count = len(unique_results) - len(filtered_results)
+        if dropped_count > 0:
+            print(f"[SEARCH] Dropped {dropped_count} sources exceeding per-domain limit ({max_per_domain})")
+            for domain, count in sorted(dropped_domains.items(), key=lambda x: -x[1])[:3]:
+                print(f"[SEARCH]   - {domain}: dropped {count}")
+
+        unique_results = filtered_results
 
     # Character limit to stay within model token limits (configurable)
     max_char_to_include = configurable.max_content_length
@@ -291,6 +411,8 @@ async def tavily_search(
     
     # Step 5: Execute all summarization tasks in parallel
     # BUG FIX: Protect gather with return_exceptions=True
+    if unique_results:
+        print(f"[SEARCH] Summarizing {len(unique_results)} sources...")
     summaries_raw = await asyncio.gather(*summarization_tasks, return_exceptions=True)
 
     # Handle exceptions - use original content as fallback

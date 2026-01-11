@@ -7,6 +7,7 @@ Stage 3: Per-theme synthesis with fine curation
 Output: Hybrid report with verified facts (green) + AI analysis (gray)
 """
 
+import asyncio
 import json
 import re
 from dataclasses import dataclass, field
@@ -40,6 +41,12 @@ except ImportError:
         verify_and_apply_cleanup,
     )
 
+# Import retry utility
+try:
+    from .utils import retry_with_backoff
+except ImportError:
+    from utils import retry_with_backoff
+
 
 # =============================================================================
 # Data Structures
@@ -61,12 +68,23 @@ class CuratedFacts:
 
 
 @dataclass
+class Citation:
+    """A citation linking prose text to a verified fact."""
+    marker: str  # e.g., "[1]"
+    fact_index: int  # Index into section's facts list
+    global_id: int = 0  # Global footnote number (set during assembly)
+
+
+@dataclass
 class ThemedSection:
     """A synthesized section for one theme."""
     theme: str
-    intro: str  # AI intro (gray)
-    facts: List[Extraction]  # Verified facts (green)
-    transitions: List[str]  # Between facts (gray)
+    prose: str = ""  # NEW: narrative with citation markers
+    citations: List[Citation] = field(default_factory=list)  # NEW: citation mappings
+    facts: List[Extraction] = field(default_factory=list)  # Verified facts
+    # Legacy fields (kept for backward compat, will remove)
+    intro: str = ""
+    transitions: List[str] = field(default_factory=list)
 
 
 @dataclass
@@ -174,7 +192,11 @@ Output JSON array (empty [] if no facts):
 
     async def extract_chunk(chunk_text):
         prompt = chunk_prompt_template.format(topic=topic, chunk=chunk_text)
-        response = await llm_call(prompt)
+        response = await retry_with_backoff(
+            lambda p=prompt: llm_call(p),
+            max_retries=5,
+            base_delay=2.0
+        )
         return parse_pointer_response(response)
 
     # Extract from all chunks in parallel
@@ -231,8 +253,12 @@ async def extract_batch(
     formatted = format_sources_for_prompt(batch, max_chars=MAX_CHARS_PER_SOURCE)
     prompt = POINTER_PROMPT.format(sources=formatted, topic=topic)
 
-    # Get pointers from LLM
-    response = await llm_call(prompt)
+    # Get pointers from LLM with retry
+    response = await retry_with_backoff(
+        lambda: llm_call(prompt),
+        max_retries=3,
+        base_delay=1.0
+    )
     pointers = parse_pointer_response(response)
 
     # Extract with code verification
@@ -252,7 +278,7 @@ async def extract_all_batched(
     min_score: float = DEFAULT_MIN_SCORE,
     on_batch_complete=None  # callback(batch_num, total_batches, extractions)
 ) -> List[Extraction]:
-    """Extract verified facts from all sources in batches.
+    """Extract verified facts from all sources in batches (parallel).
 
     Args:
         sources: All sources
@@ -266,12 +292,17 @@ async def extract_all_batched(
         All extractions (verified + partial + not_found)
     """
     batches = batch_sources(sources, batch_size)
+
+    # Run all batches in parallel
+    batch_results = await asyncio.gather(*[
+        extract_batch(batch, topic, llm_call, min_score)
+        for batch in batches
+    ])
+
+    # Flatten results and call callbacks
     all_extractions = []
-
-    for i, batch in enumerate(batches):
-        extractions = await extract_batch(batch, topic, llm_call, min_score)
+    for i, extractions in enumerate(batch_results):
         all_extractions.extend(extractions)
-
         if on_batch_complete:
             on_batch_complete(i + 1, len(batches), extractions)
 
@@ -282,10 +313,48 @@ async def extract_all_batched(
 # Deduplication (between Stage 1 and Stage 2)
 # =============================================================================
 
-def compute_text_similarity(text1: str, text2: str) -> float:
-    """Compute Jaccard similarity between two texts."""
+def extract_numbers(text: str) -> set:
+    """Extract all numbers from text (including decimals, percentages, units)."""
+    import re
+    # Match: 10000, 10,000, 10.5, 10%, 200ms, $1.2B, etc.
+    patterns = [
+        r'\d+(?:,\d{3})*(?:\.\d+)?%?',  # Basic numbers with optional %
+        r'\$[\d,]+(?:\.\d+)?[BMK]?',     # Dollar amounts
+        r'\d+(?:\.\d+)?(?:ms|s|m|h|k|K|M|B|GB|MB|TB)',  # Numbers with units
+    ]
+    numbers = set()
+    for pattern in patterns:
+        for match in re.findall(pattern, text):
+            # Normalize: remove commas, lowercase
+            normalized = match.replace(',', '').lower()
+            numbers.add(normalized)
+    return numbers
+
+
+def compute_text_similarity(text1: str, text2: str, protect_numbers: bool = True) -> float:
+    """Compute Jaccard similarity between two texts.
+
+    Args:
+        text1: First text
+        text2: Second text
+        protect_numbers: If True, return 0 if texts have different numbers
+                        (prevents "200ms" vs "180ms" from being marked as duplicate)
+    """
     if not text1 or not text2:
         return 0.0
+
+    # Number protection: if texts have different numbers, they're not duplicates
+    if protect_numbers:
+        nums1 = extract_numbers(text1)
+        nums2 = extract_numbers(text2)
+        # If either has numbers and they're different, not a duplicate
+        if nums1 and nums2 and nums1 != nums2:
+            # Check if there's meaningful overlap
+            if not nums1 & nums2:
+                return 0.0  # No number overlap = different facts
+            # Partial overlap with differences = likely different
+            if nums1 - nums2 or nums2 - nums1:
+                return 0.0  # Has numbers that don't match
 
     # Tokenize to words
     words1 = set(text1.lower().split())
@@ -359,6 +428,126 @@ def deduplicate_extractions(
 
 
 # =============================================================================
+# LLM-based Deduplication
+# =============================================================================
+
+DEDUP_PROMPT = '''Identify duplicate facts. Be STRICT - when in doubt, they are DIFFERENT.
+
+DUPLICATES: Same information, even if worded differently.
+DIFFERENT: Different numbers, different companies/products, or different subjects.
+
+STRICT RULES:
+1. Different numbers = DIFFERENT (40+ vs 50+, 200ms vs 180ms, 10k vs 5k)
+2. Different company/product names = DIFFERENT (LiveKit vs Agora, Claude vs GPT-4)
+3. Same metric but different subject = DIFFERENT ("Claude 95%" vs "GPT-4 95%")
+
+EXAMPLES:
+- "LiveKit has sub-100ms latency" vs "Agora has sub-100ms latency" → DIFFERENT (different companies!)
+- "Tracks 40+ metrics" vs "Includes 50+ metrics" → DIFFERENT (40 vs 50!)
+- "10,000 concurrent users" vs "5,000 concurrent users" → DIFFERENT (10k vs 5k!)
+- "Latency under 500ms" vs "Response time below 500 milliseconds" → DUPLICATE (same fact)
+- "SOC 2 Type II certified" vs "SOC 2 Type II with HIPAA" → DUPLICATE (same core certification)
+
+FACTS:
+{facts}
+
+Return JSON with duplicate groups. Only group facts that are TRUE duplicates.
+Be conservative - false positives (marking different facts as duplicates) are worse than false negatives.
+
+Format: {{"duplicate_groups": [[1, 5], [3, 8]]}}
+'''
+
+
+def format_facts_for_dedup(extractions: List[Extraction]) -> str:
+    """Format extractions for dedup prompt."""
+    lines = []
+    for i, ext in enumerate(extractions, 1):
+        text = ext.extracted_text or ""
+        # Truncate long facts
+        if len(text) > 200:
+            text = text[:200] + "..."
+        lines.append(f"[{i}] {text}")
+    return "\n".join(lines)
+
+
+def parse_dedup_response(response: str) -> List[List[int]]:
+    """Parse LLM dedup response to get duplicate groups."""
+    try:
+        # Try to extract JSON
+        json_match = re.search(r'\{[^{}]*"duplicate_groups"[^{}]*\}', response, re.DOTALL)
+        if json_match:
+            data = json.loads(json_match.group())
+            return data.get("duplicate_groups", [])
+
+        # Try full JSON parse
+        data = json.loads(response)
+        return data.get("duplicate_groups", [])
+    except (json.JSONDecodeError, AttributeError):
+        return []
+
+
+async def deduplicate_extractions_llm(
+    extractions: List[Extraction],
+    llm_call,
+    batch_size: int = 50
+) -> List[Extraction]:
+    """Remove duplicate extractions using LLM semantic understanding.
+
+    Args:
+        extractions: List of verified extractions
+        llm_call: Async LLM function
+        batch_size: Max facts per LLM call
+
+    Returns:
+        Deduplicated list (keeps highest-scoring from each duplicate group)
+    """
+    if len(extractions) <= 1:
+        return extractions
+
+    # Sort by match_score descending (keep best version when duplicates found)
+    sorted_ext = sorted(extractions, key=lambda x: x.match_score, reverse=True)
+
+    # For large sets, process in batches with rate limiting
+    all_duplicate_ids = set()
+    num_batches = (len(sorted_ext) + batch_size - 1) // batch_size
+
+    # Scale delay based on number of batches (more batches = higher TPM usage)
+    base_batch_delay = 1.0 if num_batches > 10 else 0.5
+
+    for batch_num, i in enumerate(range(0, len(sorted_ext), batch_size)):
+        batch = sorted_ext[i:i + batch_size]
+
+        facts_text = format_facts_for_dedup(batch)
+        prompt = DEDUP_PROMPT.format(facts=facts_text)
+
+        # Rate limit: delay between batches + retry with backoff
+        if batch_num > 0:
+            await asyncio.sleep(base_batch_delay)
+
+        response = await retry_with_backoff(
+            lambda p=prompt: llm_call(p),
+            max_retries=7,
+            base_delay=3.0
+        )
+        duplicate_groups = parse_dedup_response(response)
+
+        # From each group, mark all but first (highest scored) as duplicates
+        for group in duplicate_groups:
+            if len(group) > 1:
+                # Keep first (highest score due to sorting), mark rest as duplicates
+                # Adjust indices for batch offset
+                for idx in group[1:]:
+                    global_idx = i + idx - 1  # Convert 1-indexed to 0-indexed + batch offset
+                    if 0 <= global_idx < len(sorted_ext):
+                        all_duplicate_ids.add(global_idx)
+
+    # Filter out duplicates
+    kept = [ext for idx, ext in enumerate(sorted_ext) if idx not in all_duplicate_ids]
+
+    return kept
+
+
+# =============================================================================
 # Cleanup Stage: LLM Points, Code Removes
 # =============================================================================
 
@@ -396,7 +585,11 @@ async def cleanup_extractions(
             continue
 
         prompt = CLEANUP_PROMPT.format(facts=facts_text)
-        response = await llm_call(prompt)
+        response = await retry_with_backoff(
+            lambda p=prompt: llm_call(p),
+            max_retries=5,
+            base_delay=2.0
+        )
         cleanup_results = parse_cleanup_response(response)
 
         # Build lookup for results
@@ -450,12 +643,14 @@ You have {num_facts} verified facts. Your tasks:
 
 3. GROUP remaining facts by theme (3-5 themes)
    - Themes should map to parts of the answer
+   - CRITICAL: Each fact can ONLY appear in ONE theme - no duplicates across themes
+   - If a fact could fit multiple themes, put it in the MOST relevant one only
    - For "best X" questions: "Top Models", "Performance Metrics", "Selection Criteria"
 
 4. FINAL CHECK per fact:
    - Would you cite this in a professional research report?
    - If embarrassing to include, drop it
-
+{source_quality_guidance}
 VERIFIED FACTS:
 {facts}
 
@@ -472,6 +667,14 @@ CRITICAL:
 
 Output ONLY valid JSON.'''
 
+# Source quality guidance for arranger - injected when trust_level=high
+ARRANGER_QUALITY_GUIDANCE = """
+5. SOURCE QUALITY PREFERENCE:
+   - When choosing between similar facts, prefer those from authoritative sources
+   - Official docs > academic papers > established news > blogs/aggregators
+   - Drop facts from unknown or low-quality sources if better alternatives exist
+"""
+
 
 def format_facts_for_arranger(extractions: List[Extraction]) -> str:
     """Format verified facts for arranger prompt."""
@@ -487,18 +690,33 @@ def format_facts_for_arranger(extractions: List[Extraction]) -> str:
 
 
 def parse_arranger_response(response: str, verified_facts: List[Extraction]) -> CuratedFacts:
-    """Parse arranger LLM response into structured groups."""
+    """Parse arranger LLM response into structured groups.
+
+    Enforces cross-theme deduplication: each fact can only appear in one theme.
+    If LLM puts a fact in multiple themes, it's kept only in the first one.
+    """
     try:
         match = re.search(r'\{[\s\S]*\}', response)
         if match:
             data = json.loads(match.group())
 
+            # Track which facts have been assigned (cross-theme dedup)
+            assigned_facts = set()
             groups = []
+
             for g in data.get("groups", []):
-                groups.append(ThemeGroup(
-                    theme=g.get("theme", "Findings"),
-                    fact_ids=g.get("fact_ids", [])
-                ))
+                theme = g.get("theme", "Findings")
+                raw_ids = g.get("fact_ids", [])
+
+                # Only keep facts not already assigned to another theme
+                deduped_ids = []
+                for fid in raw_ids:
+                    if fid not in assigned_facts:
+                        deduped_ids.append(fid)
+                        assigned_facts.add(fid)
+
+                if deduped_ids:  # Only add theme if it has facts
+                    groups.append(ThemeGroup(theme=theme, fact_ids=deduped_ids))
 
             # Handle excluded - could be list of ints or list of objects
             excluded_raw = data.get("excluded", [])
@@ -525,7 +743,8 @@ def parse_arranger_response(response: str, verified_facts: List[Extraction]) -> 
 async def arrange_facts(
     verified_extractions: List[Extraction],
     topic: str,
-    llm_call
+    llm_call,
+    trust_level: str = "med"
 ) -> CuratedFacts:
     """Group and curate verified facts.
 
@@ -533,18 +752,27 @@ async def arrange_facts(
         verified_extractions: List of verified extractions only
         topic: Research topic
         llm_call: Async LLM function
+        trust_level: "high" or "med" - controls source quality guidance
 
     Returns:
         CuratedFacts with theme groups and excluded list
     """
+    # Source quality guidance is injected when trust_level=high
+    quality_guidance = ARRANGER_QUALITY_GUIDANCE if trust_level == "high" else ""
+
     facts_text = format_facts_for_arranger(verified_extractions)
     prompt = ARRANGER_PROMPT.format(
         topic=topic,
         num_facts=len(verified_extractions),
-        facts=facts_text
+        facts=facts_text,
+        source_quality_guidance=quality_guidance
     )
 
-    response = await llm_call(prompt)
+    response = await retry_with_backoff(
+        lambda: llm_call(prompt),
+        max_retries=3,
+        base_delay=1.0
+    )
     return parse_arranger_response(response, verified_extractions)
 
 
@@ -557,40 +785,54 @@ THEME_SYNTHESIS_PROMPT = '''You are writing a section of a research report.
 Theme: {theme}
 Research Topic: {topic}
 
-VERIFIED FACTS for this section (do NOT modify these):
+VERIFIED FACTS (cite using the number in brackets):
 {facts}
 
-Write:
-1. INTRO: 2-3 sentences introducing this theme
-2. TRANSITIONS: One short transition sentence before each fact (to connect ideas)
+Write 2-4 paragraphs of flowing prose that synthesizes these facts into a coherent narrative.
 
-You may DROP 1-2 facts if they don't fit the flow (list their IDs in "dropped").
+CITATION RULES:
+1. Cite facts using their bracket number: [1], [2], [3], etc.
+2. Example: "platforms can run thousands of tests[3]" or "tools offer CI/CD[2][5]"
+3. You MUST cite at least 80% of the facts provided
+4. Any sentence without a citation is assumed to be YOUR opinion, not verified
+5. If a fact has marketing language, attribute it: "claims to be..." or "according to the vendor..."
+{source_quality_guidance}
+CRITICAL: Use the EXACT numbers shown in brackets before each fact.
+Do NOT use any other numbering. Uncited sentences will be marked as unverified.
 
-CRITICAL:
-- Do NOT rewrite the facts themselves
-- Transitions only CONNECT, they don't add new information
-- Keep transitions to 1 sentence each
-- If a fact contains marketing superlatives ("best", "most", "#1", "leading"),
-  your transition should attribute it: "The source describes..." or soften it:
-  "among the leading..." Do NOT present vendor marketing as objective fact.
+STYLE:
+- Write like a research analyst, not a list maker
+- Group related points into paragraphs
+- Start with the most important findings
+- Use specific numbers and details from the facts
 
 Output JSON:
 {{
-  "intro": "Your theme introduction...",
-  "transitions": ["Transition before fact 1", "Transition before fact 2", ...],
-  "dropped": []  // fact IDs that don't fit (optional, max 2)
+  "prose": "Your synthesized paragraphs with [1], [2], etc. citations inline...",
+  "cited_ids": [1, 3, 5, ...]  // Numbers of facts you cited
 }}'''
+
+# Source quality guidance for synthesis - injected when trust_level=high
+SYNTHESIS_QUALITY_GUIDANCE = """
+6. When multiple sources support a claim, cite the more authoritative source first
+   (official docs, academic papers) before less authoritative ones (blogs).
+"""
 
 
 def format_theme_facts(facts: List[Extraction], fact_ids: List[int], all_verified: List[Extraction]) -> str:
-    """Format facts for a theme section."""
+    """Format facts for a theme section.
+
+    Facts are numbered sequentially 1, 2, 3... for citation purposes.
+    The LLM should cite using [1], [2], [3] etc.
+    """
     lines = []
     for i, fid in enumerate(fact_ids, 1):
         if 1 <= fid <= len(all_verified):
             ext = all_verified[fid - 1]
             if ext.extracted_text:
-                lines.append(f"FACT {i} (ID {fid}): {ext.extracted_text}")
-                lines.append(f"  Source: {ext.pointer.context}")
+                # Only show sequential number - no original ID to avoid confusion
+                lines.append(f"[{i}] {ext.extracted_text}")
+                lines.append(f"    Source: {ext.pointer.context}")
                 lines.append("")
     return "\n".join(lines)
 
@@ -600,62 +842,81 @@ async def synthesize_theme(
     fact_ids: List[int],
     all_verified: List[Extraction],
     topic: str,
-    llm_call
+    llm_call,
+    trust_level: str = "med"
 ) -> ThemedSection:
-    """Synthesize a single theme section.
+    """Synthesize a single theme section with prose and citations.
 
     Args:
         theme: Theme name
-        fact_ids: IDs of facts in this theme
+        fact_ids: IDs of facts in this theme (1-indexed into all_verified)
         all_verified: All verified extractions (for lookup)
         topic: Research topic
         llm_call: Async LLM function
+        trust_level: "high" or "med" - controls source quality guidance
 
     Returns:
-        ThemedSection with intro, facts, transitions
+        ThemedSection with prose, citations, and facts
     """
+    # Source quality guidance is injected when trust_level=high
+    quality_guidance = SYNTHESIS_QUALITY_GUIDANCE if trust_level == "high" else ""
+
     facts_text = format_theme_facts([], fact_ids, all_verified)
     prompt = THEME_SYNTHESIS_PROMPT.format(
         theme=theme,
         topic=topic,
-        facts=facts_text
+        facts=facts_text,
+        source_quality_guidance=quality_guidance
     )
 
-    response = await llm_call(prompt)
+    response = await retry_with_backoff(
+        lambda: llm_call(prompt),
+        max_retries=3,
+        base_delay=1.0
+    )
 
     # Parse response
+    prose = ""
+    cited_ids = []
     try:
         match = re.search(r'\{[\s\S]*\}', response)
         if match:
             data = json.loads(match.group())
-            intro = data.get("intro", "")
-            transitions = data.get("transitions", [""] * len(fact_ids))
-            dropped = data.get("dropped", [])
-        else:
-            intro = ""
-            transitions = [""] * len(fact_ids)
-            dropped = []
+            prose = data.get("prose", "")
+            cited_ids = data.get("cited_ids", [])
     except json.JSONDecodeError:
-        intro = ""
-        transitions = [""] * len(fact_ids)
-        dropped = []
+        # Fallback: use raw response as prose
+        prose = response
 
-    # Build facts list (excluding dropped)
-    kept_ids = [fid for fid in fact_ids if fid not in dropped]
+    # Build facts list from fact_ids
+    # Note: LLM sees facts as FACT 1, FACT 2... (1-indexed sequential)
+    # So [1] in prose means the first fact, [2] means second, etc.
     facts = []
-    for fid in kept_ids:
+    for fid in fact_ids:
         if 1 <= fid <= len(all_verified):
             facts.append(all_verified[fid - 1])
 
-    # Ensure transitions match facts count
-    while len(transitions) < len(facts):
-        transitions.append("")
+    # Extract citations from prose (find all [N] patterns)
+    # Map sequential position (1-indexed) to facts list index (0-indexed)
+    citation_pattern = re.findall(r'\[(\d+)\]', prose)
+    citations = []
+    seen_markers = set()
+    for marker_num in citation_pattern:
+        seq_pos = int(marker_num)  # 1-indexed position as shown in prompt
+        fact_index = seq_pos - 1   # 0-indexed into facts list
+        marker = f"[{seq_pos}]"
+        if 0 <= fact_index < len(facts) and marker not in seen_markers:
+            citations.append(Citation(
+                marker=marker,
+                fact_index=fact_index
+            ))
+            seen_markers.add(marker)
 
     return ThemedSection(
         theme=theme,
-        intro=intro,
-        facts=facts,
-        transitions=transitions[:len(facts)]
+        prose=prose,
+        citations=citations,
+        facts=facts
     )
 
 
@@ -676,22 +937,35 @@ Do NOT make up facts - only summarize what's in the sections.
 Output ONLY the summary text (no JSON).'''
 
 
-ANALYSIS_PROMPT = '''Write an analysis section for this research report.
+ANALYSIS_PROMPT = '''Synthesize the research findings into a detailed analysis.
 
 Topic: {topic}
 
-Key findings by theme:
+Verified findings by theme:
 {findings_summary}
 
-Write 2-3 paragraphs analyzing:
-1. Key patterns or trends across the findings
-2. Implications of these findings
-3. Notable gaps or areas needing more research
+Write 2-4 substantial paragraphs that SYNTHESIZE these findings:
+
+1. CONNECT THE DOTS: How do findings from different themes relate to each other?
+   - What story emerges when you combine the latency data with the capability features?
+   - How do the pricing details relate to the use cases?
+
+2. DRAW INSIGHTS: What conclusions can we draw from these specific facts?
+   - If latency is X ms and the benchmark shows Y%, what does that mean practically?
+   - Compare/contrast specific numbers or claims across sources
+
+3. PROVIDE CONTEXT: Help the reader understand what these findings mean
+   - Put metrics in perspective (is 500ms fast? how does 60% cheaper compare to alternatives?)
+   - Explain technical terms or concepts referenced in the findings
+
+4. IDENTIFY TRADEOFFS: What tensions or considerations emerge?
+   - Cost vs performance, simplicity vs flexibility, etc.
 
 CRITICAL:
-- This is YOUR interpretation (will be styled as AI analysis)
-- Reference specific themes/findings but don't repeat them
-- Be honest about limitations
+- This section is AI synthesis (will be styled differently from verified facts)
+- Reference SPECIFIC details from the findings (numbers, names, metrics)
+- DO NOT just summarize - ADD VALUE by connecting, comparing, contextualizing
+- Be concrete and detailed, not vague and generic
 
 Output ONLY the analysis text (no JSON).'''
 
@@ -719,7 +993,11 @@ async def generate_executive_summary(
         for s in sections
     ])
     prompt = EXECUTIVE_SUMMARY_PROMPT.format(topic=topic, sections_overview=overview)
-    return await llm_call(prompt)
+    return await retry_with_backoff(
+        lambda: llm_call(prompt),
+        max_retries=3,
+        base_delay=1.0
+    )
 
 
 async def generate_analysis(
@@ -738,7 +1016,11 @@ async def generate_analysis(
         topic=topic,
         findings_summary="\n".join(summary_parts)
     )
-    return await llm_call(prompt)
+    return await retry_with_backoff(
+        lambda: llm_call(prompt),
+        max_retries=3,
+        base_delay=1.0
+    )
 
 
 async def generate_conclusion(
@@ -749,7 +1031,11 @@ async def generate_conclusion(
     """Generate conclusion."""
     themes = ", ".join(s.theme for s in sections)
     prompt = CONCLUSION_PROMPT.format(topic=topic, themes=themes)
-    return await llm_call(prompt)
+    return await retry_with_backoff(
+        lambda: llm_call(prompt),
+        max_retries=3,
+        base_delay=1.0
+    )
 
 
 async def assemble_report(
@@ -773,10 +1059,12 @@ async def assemble_report(
     Returns:
         Complete HybridReport
     """
-    # Generate AI sections (can be parallel)
-    exec_summary = await generate_executive_summary(sections, topic, llm_call)
-    analysis = await generate_analysis(sections, topic, llm_call)
-    conclusion = await generate_conclusion(sections, topic, llm_call)
+    # Generate AI sections in parallel
+    exec_summary, analysis, conclusion = await asyncio.gather(
+        generate_executive_summary(sections, topic, llm_call),
+        generate_analysis(sections, topic, llm_call),
+        generate_conclusion(sections, topic, llm_call)
+    )
 
     total_used = sum(len(s.facts) for s in sections)
 
@@ -848,7 +1136,9 @@ def render_hybrid_report(report: HybridReport, use_color: bool = True) -> str:
             lines.append('<div class="verified-fact">')
             lines.append(f'<p>{fact.extracted_text}</p>')
             if fact.source_url:
-                lines.append(f'<a href="{fact.source_url}" class="source-link">{fact.pointer.context}</a>')
+                # Use context if available, otherwise extract domain from URL
+                link_text = fact.pointer.context if fact.pointer.context else fact.source_url.split('/')[2].replace('www.', '')
+                lines.append(f'<a href="{fact.source_url}" class="source-link">{link_text}</a>')
             lines.append('</div>')
 
     # Analysis section
@@ -1037,7 +1327,8 @@ async def run_pipeline_v2(
     llm_call,  # async function(prompt) -> response
     batch_size: int = BATCH_SIZE,
     min_score: float = DEFAULT_MIN_SCORE,
-    on_progress=None  # callback(stage, message)
+    on_progress=None,  # callback(stage, message)
+    trust_level: str = "med"  # "high" = facts only, "med" = prose with citations
 ) -> HybridReport:
     """Run the full three-stage pipeline.
 
@@ -1049,6 +1340,7 @@ async def run_pipeline_v2(
         batch_size: Sources per extraction batch
         min_score: Verification threshold
         on_progress: Progress callback
+        trust_level: "high" (facts only) or "med" (prose with citations)
 
     Returns:
         HybridReport ready for rendering
@@ -1073,8 +1365,9 @@ async def run_pipeline_v2(
     if not verified:
         raise ValueError("No verified extractions - cannot generate report")
 
-    # Deduplication: Remove near-duplicate extractions
-    deduped = deduplicate_extractions(verified)  # Uses default threshold=0.4
+    # Deduplication: LLM identifies semantic duplicates
+    progress("DEDUP", f"Deduplicating {len(verified)} facts (LLM semantic matching)...")
+    deduped = await deduplicate_extractions_llm(verified, llm_call)
     progress("DEDUP", f"Deduplicated: {len(verified)} → {len(deduped)} facts ({len(verified) - len(deduped)} duplicates removed)")
     verified = deduped
 
@@ -1092,28 +1385,57 @@ async def run_pipeline_v2(
 
     # Stage 2: Arrange and curate
     progress("ARRANGE", f"Grouping {len(verified)} facts by theme...")
-    curated = await arrange_facts(verified, topic, llm_call)
+    curated = await arrange_facts(verified, topic, llm_call, trust_level)
 
     total_grouped = sum(len(g.fact_ids) for g in curated.groups)
     progress("ARRANGE", f"Created {len(curated.groups)} themes, {total_grouped} facts kept, {len(curated.excluded_ids)} excluded")
 
-    # Stage 3: Per-theme synthesis
-    progress("SYNTHESIZE", "Synthesizing themed sections...")
-    sections = []
-    for group in curated.groups:
-        progress("SYNTHESIZE", f"  Processing '{group.theme}' ({len(group.fact_ids)} facts)...")
-        section = await synthesize_theme(
-            group.theme, group.fact_ids, verified, topic, llm_call
-        )
-        sections.append(section)
+    # Stage 3: Per-theme synthesis (or skip for high trust)
+    if trust_level == "high":
+        # High trust: Skip synthesis, just build sections with facts only
+        progress("SYNTHESIZE", f"High trust mode: skipping AI synthesis, using {len(curated.groups)} themes")
+        sections = []
+        for group in curated.groups:
+            facts = [verified[fid - 1] for fid in group.fact_ids if 1 <= fid <= len(verified)]
+            sections.append(ThemedSection(
+                theme=group.theme,
+                prose="",  # No AI prose
+                citations=[],  # No citations needed
+                facts=facts
+            ))
+    else:
+        # Med trust: Synthesize prose with citations
+        theme_names = [g.theme for g in curated.groups]
+        progress("SYNTHESIZE", f"Synthesizing {len(theme_names)} themes in parallel...")
 
-    # Final assembly
-    progress("ASSEMBLE", "Generating executive summary, analysis, conclusion...")
-    report = await assemble_report(
-        sections, topic, title, llm_call,
-        total_extracted=len(all_extractions),
-        total_verified=len(verified)
-    )
+        sections = await asyncio.gather(*[
+            synthesize_theme(group.theme, group.fact_ids, verified, topic, llm_call, trust_level)
+            for group in curated.groups
+        ])
+        sections = list(sections)  # Convert tuple to list
+
+    # Final assembly (skip analysis for high trust)
+    if trust_level == "high":
+        progress("ASSEMBLE", "High trust mode: minimal assembly (no AI analysis)")
+        # Build report with empty analysis/conclusion
+        total_used = sum(len(s.facts) for s in sections)
+        report = HybridReport(
+            title=title,
+            executive_summary="",  # No AI summary
+            sections=sections,
+            analysis="",  # No AI analysis
+            conclusion="",  # No AI conclusion
+            total_extracted=len(all_extractions),
+            total_verified=len(verified),
+            total_used=total_used
+        )
+    else:
+        progress("ASSEMBLE", "Generating executive summary, analysis, conclusion...")
+        report = await assemble_report(
+            sections, topic, title, llm_call,
+            total_extracted=len(all_extractions),
+            total_verified=len(verified)
+        )
 
     progress("DONE", f"Report complete: {report.verified_count} verified facts in {len(sections)} themes")
 

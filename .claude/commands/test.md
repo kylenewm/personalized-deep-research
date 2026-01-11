@@ -1,22 +1,27 @@
 # Run Tests
 
-Run the test suite and report results.
+Run the project's test suite.
 
-## Commands
+## Steps
 
-```bash
-# Activate venv first, or use full path
-source venv/bin/activate && pytest tests/unit/ -v
+1. **Detect test framework** — Look for:
+   - `pytest.ini`, `pyproject.toml` with pytest, `tests/` dir → pytest
+   - `package.json` with jest/vitest/mocha → npm test
+   - `Makefile` with test target → make test
+   - `Cargo.toml` → cargo test
+   - If unclear, ask user
 
-# Or directly:
-./venv/bin/pytest tests/unit/ -v
+2. **Find the test command** — Check for:
+   - Virtual env: `./venv/bin/pytest`, `poetry run pytest`
+   - Package.json scripts
+   - Makefile targets
+   - If multiple options exist, ask user which to run
 
-# Integration tests
-./venv/bin/pytest tests/integration/ -v
-```
+3. **Run tests**
+   - Start with unit tests if available
+   - Report results clearly
 
-## After Running
-
-- If tests pass: report summary
-- If tests fail: analyze failures, suggest fixes
-- Do NOT mark any todo as complete until tests pass
+4. **On failure**
+   - Analyze the failure
+   - Suggest specific fix
+   - Do NOT mark any todo complete until tests pass

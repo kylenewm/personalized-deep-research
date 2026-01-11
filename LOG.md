@@ -1390,3 +1390,318 @@ b53972d Fix coverage: remove per-source dedup limit, disable chunking
 
 Pushed to main. Session complete.
 
+
+---
+
+## 2026-01-10 (continued) - Trust-Level Modes
+
+### Problem: Readability vs Trust Tradeoff
+
+**User feedback:** Report with 50+ facts listed sequentially is hard to follow.
+
+**Options considered:**
+1. Lock verbatim quotes → Zero hallucination, terrible readability
+2. Free generation + post-verify → High risk (already tried, 25% hallucination)
+3. **New: Trust-level modes** → Let user choose their risk tolerance
+
+### Solution: trust_level Configuration
+
+| Mode | Hallucination Risk | Readability | Implementation |
+|------|-------------------|-------------|----------------|
+| `high` | Zero | Lower (facts only) | Skip synthesis entirely |
+| `med` | Some (marked with [u]) | Higher | Prose with citations + fact footnotes |
+| `low` | Higher | Highest | (Future) More coverage, less verification |
+
+### High Trust Mode Implementation
+
+**Key design decisions:**
+- Skip synthesis and assembly LLM calls entirely
+- Render verified facts in card-based layout per theme
+- Progressive disclosure with `<details>/<summary>` for "Show N more"
+- Zero AI prose = zero hallucination risk
+
+**Visual design:**
+```html
+<div class="theme-card">
+  <h3>Theme Name</h3>
+  <div class="fact-item">
+    <span class="fact-bullet">▸</span>
+    <div class="fact-content">
+      <p class="fact-text">"Verified fact text..."</p>
+      <a class="fact-source">source.com</a>
+    </div>
+  </div>
+  <details><summary>Show 4 more...</summary>...</details>
+</div>
+```
+
+### Med Trust Mode Implementation
+
+**Citation markers:**
+- AI writes prose with `[N]` markers linking to verified facts
+- `render_prose_with_citations()` converts `[1]` → superscript links
+- Sentences without any `[N]` marker styled as italic with `[u]` prefix
+
+**Fact footnotes:**
+- Verified facts shown at bottom grouped by theme
+- Cited facts listed first, then uncited
+- Green background styling for verified content
+
+**Hidden sections:**
+- Analysis and Conclusion sections commented out in HTML
+- Code preserved for potential future use with better citation enforcement
+- These were pure AI content without citation anchors
+
+### Pipeline Parallelization
+
+**Problem:** Pipeline was slow (6 min for 30 sources)
+
+**Root cause:** Extraction batches, theme synthesis, and assembly running sequentially
+
+**Fix:** Added `asyncio.gather()` for:
+1. Extraction batches (processed in parallel)
+2. Theme synthesis (all themes synthesized concurrently)
+3. Assembly sections (summary, analysis, conclusion in parallel)
+
+**Result:** 96 sources in 320s (vs estimated 1180s sequential)
+
+### Files Changed
+
+| File | Changes |
+|------|---------|
+| `pipeline_v2.py` | Added `trust_level` param, synthesis branching, parallel execution |
+| `render.py` | Added `render_high_trust()`, `render_prose_with_citations()`, hidden Analysis |
+| `audit_pipeline.py` | Added `--trust` flag handling |
+
+### Test Results
+
+**High trust mode:**
+- Facts rendered in cards with progressive disclosure
+- No AI prose, zero hallucination risk
+- Clean visual design
+
+**Med trust mode:**
+- Prose with `[N]` citation markers
+- `[u]` markers for uncited sentences
+- Facts as footnotes grouped by theme
+
+### Known Issues
+
+- Citation quality poor in med trust mode - LLM not following 80% citation rule
+- May need stronger prompt enforcement or post-verification
+
+### Test Fixture Saved
+
+`tests/fixtures/gold_queries/voice_agent_eval.json` - 96 sources for testing without API costs.
+
+**Query:** "How can I run simulation and evaluations for production grade voice agents?"
+
+---
+
+## 2026-01-10 (continued) - Extraction Quality & Full Audit
+
+### Extraction Quality Fixes
+
+**Problem:** Facts too long (avg 40+ words), contained headers/artifacts, product intros.
+
+**Fixes applied (all invariant-safe):**
+
+1. **POINTER_PROMPT updated** (`pointer_extract.py:451-490`)
+   - Emphasized single-sentence targeting
+   - Added explicit bad examples: "CompanyName is a platform...", headers, questions
+   - Keywords must be from ONE sentence
+
+2. **Code-level quality filters** (`pointer_extract.py:134-240`)
+   - Added 50-word max limit
+   - Header pattern rejection (anywhere in text, not just start)
+   - Question rejection (? in first 50 chars or at end)
+   - Product intro patterns: "CompanyName:" and "CompanyName is a/built/known"
+
+3. **Removed fallback bypass** (`pointer_extract.py:338-340`)
+   - Was: If quality filter rejected all candidates, return best anyway
+   - Now: If quality filter rejects all, return None
+   - Enforces quality gate as final arbiter
+
+**Results (sandbox metrics):**
+| Metric | Before | After |
+|--------|--------|-------|
+| Avg words | 40.6 | 24.6 |
+| Over 50 words | 11 | 0 |
+| Artifacts | 1 | 0 |
+| Headers | 9 | 0 |
+| Questions | 1 | 0 |
+
+### Prompt Sandbox Created
+
+**File:** `scripts/prompt_sandbox.py`
+
+**Purpose:** Autonomous iteration testing without API costs
+
+**Features:**
+- Uses cached fixture (3 sources, ~30 sec/run)
+- Auto-evaluates: word count, artifacts, questions, headers, duplicates
+- Pass/fail thresholds defined
+- Iteration logging to `sandbox_iterations.jsonl`
+
+### CLAUDE.md Safeguard Added
+
+Added "Before Any Change (Invariant Check)" section:
+- Core principle: LLM points, code extracts verbatim, LLM cannot write fact text
+- Valid vs Invalid patterns documented
+- Prevents future I1 violations
+
+### Full Pipeline Quality Audit
+
+**Created:** `QUALITY_AUDIT.md` - Comprehensive review of all pipeline stages
+
+**15 items identified across 5 areas:**
+
+| Area | Items | Priority |
+|------|-------|----------|
+| Source Quality | Authority, Freshness, Diversity | LOW-MEDIUM |
+| Extraction | Matching, Completeness, Context | MEDIUM (mostly fixed) |
+| Deduplication | Threshold, Cross/Same, Semantic | HIGH |
+| Arrangement | Coherence, Exclusion, Balance | MEDIUM |
+| Synthesis/Citation | Rate, Alignment, [u] Marking | CRITICAL |
+
+**Critical issues:**
+- Citation rate: LLM cites 30-50% instead of 80%+
+- Dedup threshold: Jaccard 0.5 causes false positives ("200ms" vs "180ms" = duplicate)
+
+**Sandboxes needed:**
+- `dedup_sandbox.py` - threshold tuning, false positive measurement
+- `citation_sandbox.py` - citation rate and alignment
+- `arrangement_sandbox.py` - coherence, exclusion, balance
+
+### Files Changed
+
+| File | Changes |
+|------|---------|
+| `scripts/prompt_sandbox.py` | NEW - autonomous iteration sandbox |
+| `CLAUDE.md` | Added invariant safeguard section |
+| `QUALITY_AUDIT.md` | NEW - full pipeline audit document |
+| `pointer_extract.py` | Updated prompt, added filters, removed fallback bypass |
+| `STATE.md` | Updated with audit status |
+
+---
+
+## 2026-01-11 - Source Quality Guidance (COMPLETE)
+
+### Context
+
+Source quality improvements were identified as "Future work" in QUALITY_AUDIT.md. Goal is to add source quality guidance that minimally affects behavior.
+
+### Approach Decided
+
+After extensive discussion, landed on simple approach:
+
+1. **Per-domain limit (always on):** Max 3 sources from any single domain to prevent echo chamber
+2. **Prompt guidance (trust=high only):** Add quality guidance to 4 prompts, tied to existing `trust_level`
+
+**What we're NOT doing:**
+- Tavily domain whitelists/blacklists (too restrictive)
+- Regex pattern matching for tiers (doesn't scale)
+- Post-hoc authority scoring (too complex)
+- New config flags (reuse trust_level)
+
+### Prompts Modified
+
+| Prompt | Location | Guidance |
+|--------|----------|----------|
+| research_system_prompt | prompts.py | Prefer authoritative sources |
+| lead_researcher_prompt | prompts.py | Quality check after research |
+| ARRANGER_PROMPT | pipeline_v2.py | Prefer facts from authoritative sources |
+| THEME_SYNTHESIS_PROMPT | pipeline_v2.py | Cite authoritative sources first |
+
+### Implementation Complete
+
+1. ✅ Added `max_sources_per_domain: int = 3` to configuration.py
+2. ✅ Added `trust_level: str = "med"` to configuration.py
+3. ✅ Implemented per-domain limit in utils.py:tavily_search() with `extract_domain()` helper
+4. ✅ Added quality guidance blocks to prompts.py (SOURCE_QUALITY_GUIDANCE_RESEARCHER, SOURCE_QUALITY_GUIDANCE_SUPERVISOR)
+5. ✅ Added quality guidance blocks to pipeline_v2.py (ARRANGER_QUALITY_GUIDANCE, SYNTHESIS_QUALITY_GUIDANCE)
+6. ✅ Updated researcher.py and brief.py to conditionally inject guidance when trust_level=high
+7. ✅ Updated arrange_facts() and synthesize_theme() to take trust_level parameter
+8. ✅ Created quality_sandbox.py - all tests passing
+
+### Files Changed
+
+- `src/open_deep_research/configuration.py` - added max_sources_per_domain, trust_level
+- `src/open_deep_research/utils.py` - added extract_domain(), per-domain limiting
+- `src/open_deep_research/prompts.py` - added quality guidance blocks and placeholders
+- `src/open_deep_research/pipeline_v2.py` - added quality guidance to arranger and synthesis
+- `src/open_deep_research/nodes/researcher.py` - conditional guidance injection
+- `src/open_deep_research/nodes/brief.py` - conditional guidance injection
+- `scripts/quality_sandbox.py` - new sandbox for testing
+
+---
+
+## 2026-01-11 - Upstream Sandboxes & Render CSS Fixes
+
+### Retry Logic Added
+
+**File:** `src/open_deep_research/utils.py`
+
+Added `retry_with_backoff()` wrapper for rate limit handling:
+- Exponential backoff (1s, 2s, 4s)
+- 3 max retries
+- Applied to: dedup LLM calls, tavily search, researcher tool execution
+
+### Upstream Sandboxes Built
+
+Created three sandboxes for upstream optimization testing:
+
+| Sandbox | File | Purpose |
+|---------|------|---------|
+| Researcher | `scripts/researcher_sandbox.py` | Test research loop efficiency |
+| Search | `scripts/search_sandbox.py` | Test Tavily + summarization |
+| Brief | `scripts/brief_sandbox.py` | Test query → plan quality |
+
+### User Decision: Upstream Optimization Low ROI
+
+User insight: "at end of day goal is to have enough content" and upstream "seems good enough as is"
+
+**Conclusion:** The real value was in downstream improvements (dedup, arrangement, synthesis). Upstream (researcher, brief, search) already works well enough. Pausing upstream optimization work.
+
+### Render CSS Fixes
+
+**Problem 1:** Two-column layout collapsed (second column was 18px wide)
+
+**Fix:** Changed grid-template-columns from `1fr 1fr` to `minmax(0, 1fr) minmax(0, 1fr)`
+
+Files: `templates/report.html`, `src/open_deep_research/render.py`
+
+**Problem 2:** Empty H2 in second column creating spacing issues
+
+**Fix:** Changed `<h2>&nbsp;</h2>` to `<h2 style="visibility:hidden">Key Findings</h2>`
+
+**Problem 3:** Aggressive unverified text styling
+
+**User feedback:** "woah i hate the unverified text part"
+
+**Fix:** Removed yellow gradient/amber border styling, left neutral
+
+### Stress Test Updated
+
+**File:** `scripts/stress_test.py`
+
+Changes:
+- Now uses existing `render_report()` from render.py instead of custom HTML
+- Reduced to 8 sources for faster iteration
+- Outputs to `stress_test_report.html`
+
+### Files Changed
+
+| File | Changes |
+|------|---------|
+| `src/open_deep_research/utils.py` | Added `retry_with_backoff()` |
+| `src/open_deep_research/pipeline_v2.py` | Wrapped dedup LLM calls with retry |
+| `src/open_deep_research/nodes/researcher.py` | Added trace instrumentation |
+| `scripts/researcher_sandbox.py` | NEW - research loop testing |
+| `scripts/search_sandbox.py` | NEW - Tavily + summarization testing |
+| `scripts/brief_sandbox.py` | NEW - query → plan testing |
+| `scripts/stress_test.py` | Updated to use render_report() |
+| `templates/report.html` | Fixed grid columns |
+| `src/open_deep_research/render.py` | Fixed grid columns, visibility hidden H2, removed unverified styling |
+| `STATE.md` | Updated status |
+

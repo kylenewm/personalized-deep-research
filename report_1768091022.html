@@ -1,0 +1,575 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Research Report</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Source+Serif+4:opsz,wght@8..60,400;8..60,600&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --serif: 'Source Serif 4', Georgia, 'Times New Roman', serif;
+            --sans: 'Inter', -apple-system, system-ui, sans-serif;
+
+            --ink: #1a1a1a;
+            --ink-light: #4a4a4a;
+            --ink-muted: #737373;
+            --ink-faint: #a3a3a3;
+
+            --paper: #ffffff;
+            --paper-warm: #fafaf8;
+            --rule: #e5e5e5;
+            --rule-light: #f0f0f0;
+
+            --accent: #1e40af;
+            --accent-muted: #3b5998;
+            --verified: #166534;
+            --verified-bg: #f7faf8;
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        html {
+            font-size: 17px;
+            -webkit-font-smoothing: antialiased;
+        }
+
+        body {
+            font-family: var(--serif);
+            color: var(--ink);
+            background: var(--paper);
+            line-height: 1.58;
+            padding: 3rem 1.5rem 4rem;
+            max-width: 1100px;
+            margin: 0 auto;
+        }
+
+        /* =================================================================
+           Header
+           ================================================================= */
+        header {
+            margin: 0 0 2.5rem;
+            text-align: center;
+            padding-bottom: 2rem;
+            border-bottom: 1px solid var(--rule);
+        }
+
+        .overline {
+            font-family: var(--sans);
+            font-size: 0.6875rem;
+            font-weight: 600;
+            letter-spacing: 0.1em;
+            text-transform: uppercase;
+            color: var(--ink-muted);
+            margin-bottom: 0.75rem;
+        }
+
+        h1 {
+            font-family: var(--serif);
+            font-size: 2.25rem;
+            font-weight: 600;
+            line-height: 1.15;
+            letter-spacing: -0.02em;
+            color: var(--ink);
+            margin-bottom: 1.25rem;
+        }
+
+        .summary {
+            font-size: 1.125rem;
+            line-height: 1.65;
+            color: var(--ink-light);
+            max-width: 900px;
+            margin: 0 auto;
+        }
+
+        /* =================================================================
+           Two Column Layout
+           ================================================================= */
+        .columns {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 2.5rem;
+            margin-top: 2rem;
+        }
+
+        .column {
+            min-width: 0;
+        }
+
+        /* =================================================================
+           Section Headers
+           ================================================================= */
+        h2 {
+            font-family: var(--sans);
+            font-size: 0.6875rem;
+            font-weight: 600;
+            letter-spacing: 0.08em;
+            text-transform: uppercase;
+            color: var(--ink-muted);
+            padding-bottom: 0.625rem;
+            border-bottom: 1px solid var(--rule);
+            margin-bottom: 1.25rem;
+        }
+
+        h3 {
+            font-family: var(--serif);
+            font-size: 1.25rem;
+            font-weight: 600;
+            color: var(--ink);
+            margin: 1.75rem 0 0.625rem;
+            line-height: 1.3;
+        }
+
+        h3:first-of-type {
+            margin-top: 0;
+        }
+
+        /* =================================================================
+           Facts
+           ================================================================= */
+        .fact {
+            padding: 1rem 0;
+            border-bottom: 1px solid var(--rule-light);
+        }
+
+        .fact:last-child {
+            border-bottom: none;
+        }
+
+        .fact-text {
+            font-size: 0.9375rem;
+            line-height: 1.6;
+            color: var(--ink);
+            margin-bottom: 0.5rem;
+        }
+
+        .fact-source {
+            font-family: var(--sans);
+            font-size: 0.75rem;
+            color: var(--ink-faint);
+            display: flex;
+            align-items: center;
+            gap: 0.375rem;
+        }
+
+        .fact-source a {
+            color: var(--verified);
+            text-decoration: none;
+            font-weight: 500;
+        }
+
+        .fact-source a:hover {
+            text-decoration: underline;
+        }
+
+        .source-sep {
+            color: var(--rule);
+        }
+
+        .confidence {
+            font-size: 0.6875rem;
+            color: var(--verified);
+            font-weight: 500;
+        }
+
+        /* =================================================================
+           Synthesis Text
+           ================================================================= */
+        .synthesis {
+            font-size: 0.875rem;
+            line-height: 1.6;
+            color: var(--ink-muted);
+            font-style: italic;
+            margin: 0.5rem 0;
+        }
+
+        /* =================================================================
+           Full Width Sections
+           ================================================================= */
+        .full-width {
+            grid-column: 1 / -1;
+            margin: 2rem 0 0;
+            padding-top: 2rem;
+            border-top: 1px solid var(--rule);
+        }
+
+        .prose {
+            font-size: 1rem;
+            line-height: 1.65;
+            color: var(--ink-light);
+        }
+
+        .prose p {
+            margin-bottom: 1rem;
+        }
+
+        .prose p:last-child {
+            margin-bottom: 0;
+        }
+
+        /* =================================================================
+           Stats
+           ================================================================= */
+        .stats {
+            grid-column: 1 / -1;
+            display: flex;
+            justify-content: center;
+            gap: 3rem;
+            margin-top: 3rem;
+            padding-top: 1.5rem;
+            border-top: 1px solid var(--rule);
+        }
+
+        .stat {
+            text-align: center;
+        }
+
+        .stat-value {
+            font-family: var(--sans);
+            font-size: 1.75rem;
+            font-weight: 600;
+            color: var(--ink);
+            line-height: 1;
+        }
+
+        .stat-label {
+            font-family: var(--sans);
+            font-size: 0.625rem;
+            font-weight: 500;
+            letter-spacing: 0.05em;
+            text-transform: uppercase;
+            color: var(--ink-faint);
+            margin-top: 0.25rem;
+        }
+
+        /* =================================================================
+           Responsive
+           ================================================================= */
+        @media (max-width: 800px) {
+            .columns {
+                grid-template-columns: 1fr;
+                gap: 0;
+            }
+
+            .column + .column {
+                margin-top: 2rem;
+                padding-top: 2rem;
+                border-top: 1px solid var(--rule-light);
+            }
+
+            h1 {
+                font-size: 1.75rem;
+            }
+
+            .stats {
+                gap: 2rem;
+                flex-wrap: wrap;
+            }
+        }
+
+        @media print {
+            body {
+                padding: 1rem;
+            }
+            .columns {
+                gap: 2rem;
+            }
+            .fact {
+                break-inside: avoid;
+            }
+        }
+    </style>
+</head>
+<body>
+
+<header>
+    <p class="overline">Research Report</p>
+    <h1>Research Report</h1>
+    <p class="summary">The OpenAI real-time API offers significant benefits across multiple dimensions, including low latency and seamless real-time communication, supported by four verified findings. It delivers advanced speech and voice quality, enhancing user experience through six validated insights. The API demonstrates strong model performance and capabilities, with six confirmed advantages, while also ensuring safety, privacy, and robust data controls as evidenced by three key findings. Additionally, it provides cost efficiency and effective session management, supported by three verified points, making it a comprehensive solution for real-time AI applications.</p>
+</header>
+
+<div class="columns">
+
+    <div class="column">
+        <h2>Verified Findings</h2>
+<h3>Low Latency and Real-Time Communication</h3>
+<p class="synthesis">Low latency and real-time communication are critical for enabling seamless and natural interactions in modern applications. The OpenAI Realtime API is designed to support these needs by providing efficient and responsive interfaces for multimodal and speech-to-speech communication.</p>
+<div class="fact">
+            <p class="fact-text">The OpenAI Realtime API enables low-latency communication with [models](/docs/models) that natively support speech-to-speech interactions as well as multimodal inputs (audio, images, and text) and outputs (audio and text).</p>
+            <div class="fact-source">
+                <a href="https://platform.openai.com/docs/guides/realtime" target="_blank" rel="noopener">API capabilities and inputs</a>
+                <span class="source-sep">/</span>
+                <span>platform.openai.com</span>
+                <span class="source-sep">/</span>
+                <span class="confidence">80%</span>
+            </div>
+        </div>
+<div class="fact">
+            <p class="fact-text">Since we first introduced the Realtime API in public beta last October, thousands of developers have built with the API and helped shape the improvements we’re releasing today—optimized for reliability, low latency, and high quality to successfully deploy voice agents in production.</p>
+            <div class="fact-source">
+                <a href="https://openai.com/index/introducing-gpt-realtime/" target="_blank" rel="noopener">Beta usage and feedback</a>
+                <span class="source-sep">/</span>
+                <span>openai.com</span>
+                <span class="source-sep">/</span>
+                <span class="confidence">75%</span>
+            </div>
+        </div>
+<div class="fact">
+            <p class="fact-text">Like OpenAI’s [ChatGPT Advanced Voice Mode](https://help.openai.com/en/articles/8400625-voice-mode-faq), the new Realtime API enables developers to build low-latency, multimodal features in applications, and supports natural speech-to-speech conversations using the [six preset</p>
+            <div class="fact-source">
+                <a href="https://thenewstack.io/openais-realtime-api-takes-a-bow/" target="_blank" rel="noopener">Voice features</a>
+                <span class="source-sep">/</span>
+                <span>thenewstack.io</span>
+                <span class="source-sep">/</span>
+                <span class="confidence">75%</span>
+            </div>
+        </div>
+<div class="fact">
+            <p class="fact-text">There are three primary supported interfaces for the Realtime API: [WebRTC connection Ideal for browser and client-side interactions with a Realtime model.</p>
+            <div class="fact-source">
+                <a href="https://platform.openai.com/docs/guides/realtime" target="_blank" rel="noopener">Supported connection types</a>
+                <span class="source-sep">/</span>
+                <span>platform.openai.com</span>
+                <span class="source-sep">/</span>
+                <span class="confidence">75%</span>
+            </div>
+        </div>
+<h3>Advanced Speech and Voice Quality</h3>
+<p class="synthesis">Advancements in speech and voice quality are critical for creating more natural and engaging human-computer interactions. The OpenAI Realtime API introduces several features aimed at enhancing the expressiveness and responsiveness of speech synthesis models.</p>
+<div class="fact">
+            <p class="fact-text">We’re also releasing two new voices, Cedar and Marin, which are available exclusively in the Realtime API starting today.</p>
+            <div class="fact-source">
+                <a href="https://openai.com/index/introducing-gpt-realtime/" target="_blank" rel="noopener">New voices introduced</a>
+                <span class="source-sep">/</span>
+                <span>openai.com</span>
+                <span class="source-sep">/</span>
+                <span class="confidence">100%</span>
+            </div>
+        </div>
+<div class="fact">
+            <p class="fact-text">We trained `gpt-realtime` to produce higher-quality speech that sounds more natural and can follow fine-grained instructions, such as “speak quickly and professionally” or “speak empathetically in a French accent.</p>
+            <div class="fact-source">
+                <a href="https://openai.com/index/introducing-gpt-realtime/" target="_blank" rel="noopener">Voice quality improvements</a>
+                <span class="source-sep">/</span>
+                <span>openai.com</span>
+                <span class="source-sep">/</span>
+                <span class="confidence">100%</span>
+            </div>
+        </div>
+<div class="fact">
+            <p class="fact-text">Models need to speak with the intonation, emotion, and pace of a human to create an enjoyable experience and encourage continuous conversation with users.</p>
+            <div class="fact-source">
+                <a href="https://openai.com/index/introducing-gpt-realtime/" target="_blank" rel="noopener">Audio quality improvements</a>
+                <span class="source-sep">/</span>
+                <span>openai.com</span>
+                <span class="source-sep">/</span>
+                <span class="confidence">80%</span>
+            </div>
+        </div>
+<div class="fact">
+            <p class="fact-text">The Realtime API supports natural speech-based conversations, similar to OpenAI’s ChatGPT Advanced Voice Mode, using a [set of six preset voices](https://platform.openai.com/docs/guides/text-to-speech).</p>
+            <div class="fact-source">
+                <a href="https://pureai.com/articles/2024/10/07/openai-unveils-realtime-api.aspx" target="_blank" rel="noopener">Use cases and voice support</a>
+                <span class="source-sep">/</span>
+                <span>pureai.com</span>
+                <span class="source-sep">/</span>
+                <span class="confidence">75%</span>
+            </div>
+        </div>
+<div class="fact">
+            <p class="fact-text">We’re also releasing our most advanced speech-to-speech model yet—`gpt-realtime`. The new model shows improvements in following complex instructions, calling tools with precision, and producing speech that sounds more natural and expressive.</p>
+            <div class="fact-source">
+                <a href="https://openai.com/index/introducing-gpt-realtime/" target="_blank" rel="noopener">Model improvements</a>
+                <span class="source-sep">/</span>
+                <span>openai.com</span>
+                <span class="source-sep">/</span>
+                <span class="confidence">60%</span>
+            </div>
+        </div>
+<div class="fact">
+            <p class="fact-text">It’s better at interpreting system messages and developer prompts—whether that’s reading disclaimer scripts word-for-word on a support call, repeating back alphanumerics, or switching seamlessly between languages mid-sentence.</p>
+            <div class="fact-source">
+                <a href="https://openai.com/index/introducing-gpt-realtime/" target="_blank" rel="noopener">Model capabilities</a>
+                <span class="source-sep">/</span>
+                <span>openai.com</span>
+                <span class="source-sep">/</span>
+                <span class="confidence">50%</span>
+            </div>
+        </div>
+<h3>Model Performance and Capabilities</h3>
+<p class="synthesis">The OpenAI real-time API demonstrates significant advancements in model performance and capabilities, particularly in audio comprehension and function calling. These improvements enable more accurate reasoning, instruction following, and seamless interaction in real-time applications.</p>
+<div class="fact">
+            <p class="fact-text">On the Big Bench Audio eval measuring reasoning capabilities, `gpt-realtime` scores 82.8% accuracy—beating our previous model from December 2024, which scores 65.6%.</p>
+            <div class="fact-source">
+                <a href="https://openai.com/index/introducing-gpt-realtime/" target="_blank" rel="noopener">Reasoning benchmark performance</a>
+                <span class="source-sep">/</span>
+                <span>openai.com</span>
+                <span class="source-sep">/</span>
+                <span class="confidence">75%</span>
+            </div>
+        </div>
+<div class="fact">
+            <p class="fact-text">`gpt-realtime` shows higher intelligence and can comprehend native audio with greater accuracy.</p>
+            <div class="fact-source">
+                <a href="https://openai.com/index/introducing-gpt-realtime/" target="_blank" rel="noopener">Intelligence and comprehension</a>
+                <span class="source-sep">/</span>
+                <span>openai.com</span>
+                <span class="source-sep">/</span>
+                <span class="confidence">60%</span>
+            </div>
+        </div>
+<div class="fact">
+            <p class="fact-text">On the MultiChallenge audio benchmark measuring instruction following accuracy, `gpt-realtime` scores 30.5%, a significant improvement over our previous model from December 2024, which scores 20.6%.</p>
+            <div class="fact-source">
+                <a href="https://openai.com/index/introducing-gpt-realtime/" target="_blank" rel="noopener">Instruction following improvement</a>
+                <span class="source-sep">/</span>
+                <span>openai.com</span>
+                <span class="source-sep">/</span>
+                <span class="confidence">50%</span>
+            </div>
+        </div>
+<div class="fact">
+            <p class="fact-text">On the ComplexFuncBench audio eval measuring function calling performance, `gpt-realtime` scores 66.5%, while our previous model from December 2024 scores 49.7%.</p>
+            <div class="fact-source">
+                <a href="https://openai.com/index/introducing-gpt-realtime/" target="_blank" rel="noopener">Function calling performance</a>
+                <span class="source-sep">/</span>
+                <span>openai.com</span>
+                <span class="source-sep">/</span>
+                <span class="confidence">50%</span>
+            </div>
+        </div>
+<div class="fact">
+            <p class="fact-text">We’ve also made improvements to [asynchronous function calling⁠(opens in a new window)](http://platform.openai.com/docs/guides/realtime-function-calling). Long-running function calls will no longer disrupt the flow of a session—the model can continue a fluid conversation while waiting on results.</p>
+            <div class="fact-source">
+                <a href="https://openai.com/index/introducing-gpt-realtime/" target="_blank" rel="noopener">Async function calling feature</a>
+                <span class="source-sep">/</span>
+                <span>openai.com</span>
+                <span class="source-sep">/</span>
+                <span class="confidence">50%</span>
+            </div>
+        </div>
+<div class="fact">
+            <p class="fact-text">Additionally, the API supports function calling, which allows voice assistants to respond to user requests by performing actions, such as placing orders or retrieving personalized information.</p>
+            <div class="fact-source">
+                <a href="https://pureai.com/articles/2024/10/07/openai-unveils-realtime-api.aspx" target="_blank" rel="noopener">Function calling support</a>
+                <span class="source-sep">/</span>
+                <span>pureai.com</span>
+                <span class="source-sep">/</span>
+                <span class="confidence">40%</span>
+            </div>
+        </div>
+    </div>
+
+    <div class="column">
+        <h2>&nbsp;</h2>
+<h3>Safety, Privacy, and Data Controls</h3>
+<p class="synthesis">Ensuring safety, privacy, and data control is paramount when integrating AI technologies into applications. The OpenAI Realtime API addresses these concerns through comprehensive measures designed to protect user data and maintain secure interactions.</p>
+<div class="fact">
+            <p class="fact-text">The Realtime API fully supports [EU Data Residency⁠(opens in a new window)](https://platform.openai.com/docs/guides/your-data#data-residency-controls) for EU-based applications and is covered by our [enterprise privacy commitments⁠](https://openai.com/enterprise-privacy/).</p>
+            <div class="fact-source">
+                <a href="https://openai.com/index/introducing-gpt-realtime/" target="_blank" rel="noopener">Data residency and privacy</a>
+                <span class="source-sep">/</span>
+                <span>openai.com</span>
+                <span class="source-sep">/</span>
+                <span class="confidence">100%</span>
+            </div>
+        </div>
+<div class="fact">
+            <p class="fact-text">The Realtime API includes robust safety protections, including automated monitoring and human review of flagged interactions.</p>
+            <div class="fact-source">
+                <a href="https://pureai.com/articles/2024/10/07/openai-unveils-realtime-api.aspx" target="_blank" rel="noopener">Safety features</a>
+                <span class="source-sep">/</span>
+                <span>pureai.com</span>
+                <span class="source-sep">/</span>
+                <span class="confidence">75%</span>
+            </div>
+        </div>
+<div class="fact">
+            <p class="fact-text">We employ active classifiers over Realtime API sessions, meaning certain conversations can be halted if they are detected as violating our harmful content guidelines.</p>
+            <div class="fact-source">
+                <a href="https://openai.com/index/introducing-gpt-realtime/" target="_blank" rel="noopener">Safety and misuse prevention</a>
+                <span class="source-sep">/</span>
+                <span>openai.com</span>
+                <span class="source-sep">/</span>
+                <span class="confidence">50%</span>
+            </div>
+        </div>
+<h3>Cost Efficiency and Session Management</h3>
+<p class="synthesis">Effective cost efficiency and session management are critical considerations when utilizing real-time APIs. The OpenAI real-time API offers several features designed to optimize both the cost and performance of conversational applications.</p>
+<div class="fact">
+            <p class="fact-text">We’ve also added fine-grained control for conversation context to let developers set intelligent token limits and truncate multiple turns at a time, significantly reducing cost for long sessions.</p>
+            <div class="fact-source">
+                <a href="https://openai.com/index/introducing-gpt-realtime/" target="_blank" rel="noopener">Cost management features</a>
+                <span class="source-sep">/</span>
+                <span>openai.com</span>
+                <span class="source-sep">/</span>
+                <span class="confidence">50%</span>
+            </div>
+        </div>
+<div class="fact">
+            <p class="fact-text">This has two really huge benefits: much simpler code, and lower latency.</p>
+            <div class="fact-source">
+                <a href="https://www.latent.space/p/realtime-api" target="_blank" rel="noopener">Context management benefits</a>
+                <span class="source-sep">/</span>
+                <span>latent.space</span>
+                <span class="source-sep">/</span>
+                <span class="confidence">50%</span>
+            </div>
+        </div>
+<div class="fact">
+            <p class="fact-text">Typical conversation costs: ``` - 1 minute — $0.11 - 2 minutes - $0.26 - 5 minutes - $0.92 - 10 minutes - $2.68 - 15 minutes - $5.28 ``` OpenAI does not generate tokens for silent(-ish) audio input (audio with neither speech nor significant background noise).</p>
+            <div class="fact-source">
+                <a href="https://www.latent.space/p/realtime-api" target="_blank" rel="noopener">Cost and caching</a>
+                <span class="source-sep">/</span>
+                <span>latent.space</span>
+                <span class="source-sep">/</span>
+                <span class="confidence">50%</span>
+            </div>
+        </div>
+    </div>
+
+    <div class="full-width">
+        <h2>Analysis</h2>
+        <div class="prose">
+            <p>The OpenAI Realtime API represents a significant advancement by tightly integrating low-latency communication with high-quality speech and sophisticated model capabilities, creating a seamless real-time conversational experience. The API’s ability to support native speech-to-speech interactions with minimal delay directly complements the enhanced voice models like `gpt-realtime`, which not only produce natural-sounding speech with nuanced intonation and emotion but also demonstrate superior reasoning and instruction-following accuracy. For instance, the `gpt-realtime` model’s 82.8% accuracy on the Big Bench Audio eval and a 30.5% score on the MultiChallenge audio benchmark indicate a leap in comprehension and responsiveness that is critical for real-time applications. When combined, these features enable developers to build interactive voice applications that feel fluid and intelligent, closely mirroring human conversation dynamics.</p>
+<p>From a practical standpoint, the low latency of the Realtime API—though exact millisecond figures are not specified—can be inferred as sufficiently fast to support natural dialogue flows, akin to OpenAI’s ChatGPT Advanced Voice Mode, which is known for near-instantaneous responses. This speed, paired with the model’s improved accuracy, means users experience fewer awkward pauses or misinterpretations, enhancing engagement and usability in domains like virtual assistants, customer service bots, or live translation tools. Moreover, the introduction of new voices such as Cedar and Marin exclusively in the Realtime API underscores a focus on voice quality as a differentiator, suggesting that OpenAI prioritizes not just speed and intelligence but also the emotional and aesthetic aspects of speech synthesis.</p>
+<p>Cost efficiency and session management features further reinforce the API’s suitability for scalable, real-world deployment. The fine-grained control over conversation context and token limits simplifies development and reduces latency, which is crucial when managing longer or more complex interactions. Pricing tiers—ranging from $0.11 for one minute to $5.28 for fifteen minutes—offer transparency and predictability, allowing developers to balance cost against usage patterns. When contextualized against the performance gains, these costs appear competitive, especially considering the API’s advanced capabilities and safety features. The inclusion of robust safety mechanisms, such as automated monitoring and active classifiers that can halt harmful conversations, adds a layer of trust and compliance that is essential for enterprise adoption, particularly given the support for EU data residency requirements.</p>
+<p>However, these benefits come with inherent tradeoffs. The balance between cost and performance is nuanced; while the API offers lower latency and improved speech quality, longer sessions can become expensive, potentially limiting use cases that require extended interactions unless carefully optimized. Similarly, the simplification of session management through token truncation reduces complexity and latency but may constrain flexibility in handling highly dynamic or context-rich conversations. Additionally, the emphasis on safety and privacy, while critical, might introduce slight delays due to monitoring processes or restrict certain types of content, which developers need to consider when designing user experiences. Overall, the OpenAI Realtime API’s combination of speed, intelligence, voice quality, and cost controls positions it as a powerful tool for real-time conversational AI, but successful implementation requires thoughtful balancing of these interrelated factors.</p>
+        </div>
+    </div>
+
+    <div class="full-width" style="margin-top: 0; border-top: none; padding-top: 1.5rem;">
+        <h2>Conclusion</h2>
+        <div class="prose">
+            <p>In conclusion, the OpenAI real-time API offers significant benefits including low latency for seamless real-time communication, advanced speech and voice quality, and robust model performance. Additionally, it emphasizes safety, privacy, and data controls while providing cost-efficient session management. These features collectively make the API a powerful tool for applications requiring responsive and secure AI interactions.</p>
+        </div>
+    </div>
+
+    <div class="stats">
+        <div class="stat">
+            <div class="stat-value">65</div>
+            <div class="stat-label">Sources</div>
+        </div>
+        <div class="stat">
+            <div class="stat-value">41</div>
+            <div class="stat-label">Verified</div>
+        </div>
+        <div class="stat">
+            <div class="stat-value">22</div>
+            <div class="stat-label">Cited</div>
+        </div>
+        <div class="stat">
+            <div class="stat-value">5</div>
+            <div class="stat-label">Themes</div>
+        </div>
+    </div>
+
+</div>
+
+</body>
+</html>

@@ -49,7 +49,7 @@ class ExtractionReport:
 
 
 def clean_extracted_text(text: str, max_length: int = 200) -> str:
-    """Clean extracted text of HTML/XML tags, artifacts, and normalize.
+    """Clean extracted text of HTML/XML tags, markdown, artifacts, and normalize.
 
     Args:
         text: Raw text to clean
@@ -58,12 +58,44 @@ def clean_extracted_text(text: str, max_length: int = 200) -> str:
     # Strip HTML/XML tags
     text = re.sub(r'<[^>]+>', '', text)
 
+    # Strip markdown links [text](url) → text
+    text = re.sub(r'\[([^\]]+)\]\([^)]+\)', r'\1', text)
+
+    # Strip markdown reference links [text](#anchor) → text
+    text = re.sub(r'\[([^\]]+)\]\(#[^)]*\)', r'\1', text)
+
+    # Strip orphaned link fragments like "text](#anchor)" or "](#anchor)"
+    text = re.sub(r'\w*\]\(#[^)]*\)', '', text)
+    text = re.sub(r'\]\([^)]*\)', '', text)
+
+    # Strip markdown images ![alt](url) or broken !Image patterns
+    text = re.sub(r'!\[[^\]]*\]\([^)]*\)', '', text)
+    text = re.sub(r'!Image\s*\d+[^\s]*', '', text)
+
+    # Strip bold **text** or __text__ → text
+    text = re.sub(r'\*\*([^*]+)\*\*', r'\1', text)
+    text = re.sub(r'__([^_]+)__', r'\1', text)
+
+    # Strip orphaned ** anywhere (bold markers without matching pair)
+    text = re.sub(r'^\*\*\s*', '', text)  # Start
+    text = re.sub(r'\s*\*\*$', '', text)  # End
+    text = re.sub(r'\*\*\s+', ' ', text)  # Mid-text with space after
+    text = re.sub(r'\s+\*\*', ' ', text)  # Mid-text with space before
+    text = re.sub(r'(\w)\*\*\s', r'\1 ', text)  # Word** followed by space
+
+    # Strip italic *text* or _text_ → text (but not bullet points)
+    text = re.sub(r'(?<!\*)\*([^*]+)\*(?!\*)', r'\1', text)
+
+    # Strip markdown headers ## Header → Header
+    text = re.sub(r'^#{1,6}\s*', '', text, flags=re.MULTILINE)
+
     # Remove separator lines (----, ===, etc.)
     text = re.sub(r'-{3,}', ' ', text)
     text = re.sub(r'={3,}', ' ', text)
 
-    # Remove bullet-style prefixes
+    # Remove bullet-style prefixes (including markdown *)
     text = re.sub(r'^\s*[-•*]\s*', '', text)
+    text = re.sub(r'\s+[-•*]\s+', ' ', text)  # Mid-text bullets
 
     # Normalize whitespace
     text = re.sub(r'\s+', ' ', text)
@@ -71,32 +103,50 @@ def clean_extracted_text(text: str, max_length: int = 200) -> str:
 
     # Truncate to max_length at sentence boundary if too long
     if len(text) > max_length:
-        # Find last sentence ending before max_length
+        # Find last COMPLETE sentence ending before max_length
+        # Avoid cutting mid-URL by looking for sentence endings not preceded by common URL patterns
         truncated = text[:max_length]
-        last_period = truncated.rfind('.')
-        last_question = truncated.rfind('?')
-        last_exclaim = truncated.rfind('!')
 
-        cut_point = max(last_period, last_question, last_exclaim)
-        if cut_point > max_length // 2:  # Only use if reasonably far in
-            text = text[:cut_point + 1]
+        # Find sentence boundaries (. ! ?) not inside URLs
+        # Look for period followed by space and capital, or end of string
+        best_cut = -1
+        for match in re.finditer(r'[.!?](?=\s+[A-Z]|\s*$)', truncated):
+            best_cut = match.end()
+
+        if best_cut > max_length // 2:
+            text = text[:best_cut].strip()
         else:
-            # Fall back to word boundary - don't add ... (would fail quality filter)
-            text = truncated.rsplit(' ', 1)[0]
+            # Fall back: find last period/question/exclaim
+            last_period = truncated.rfind('. ')
+            last_question = truncated.rfind('? ')
+            last_exclaim = truncated.rfind('! ')
+            cut_point = max(last_period, last_question, last_exclaim)
+
+            if cut_point > max_length // 3:
+                text = text[:cut_point + 1].strip()
+            else:
+                # Last resort: word boundary
+                text = truncated.rsplit(' ', 1)[0]
 
     return text
 
 
-def is_quality_extraction(text: str) -> bool:
+def is_quality_extraction(text: str, max_words: int = 50) -> bool:
     """Filter out garbage extractions (tables, metadata, fragments, navigation).
 
     Args:
         text: Extracted text to evaluate
+        max_words: Maximum word count (default 50, facts should be concise)
 
     Returns:
         True if text is quality content, False if garbage
     """
     if not text or len(text) < 50:  # Minimum 50 chars for substance
+        return False
+
+    # Reject if too long (facts should be concise claims, not paragraphs)
+    word_count = len(text.split())
+    if word_count > max_words:
         return False
 
     # Reject table fragments (multiple pipe characters)
@@ -159,6 +209,32 @@ def is_quality_extraction(text: str) -> bool:
 
     # Too many markdown artifacts = formatting, not content
     if text.count('**') > 4 or text.count('](') > 2:
+        return False
+
+    # Reject product intro patterns: "CompanyName: description" or "CompanyName is a/the/an"
+    # These are overviews, not specific claims
+    intro_match = re.match(r'^([A-Z][a-zA-Z0-9]+)\s*[:,]\s*', text)
+    if intro_match:
+        # Starts with "CompanyName:" or "CompanyName,"
+        return False
+
+    intro_match = re.match(r'^([A-Z][a-zA-Z0-9]+)\s+(?:is\s+(?:a|an|the|built|known|designed))', text)
+    if intro_match:
+        # "CompanyName is a platform..." or "CompanyName is built for..."
+        return False
+
+    # Reject header patterns (at start or anywhere in text)
+    header_patterns = ['best for:', 'key features:', 'key takeaways:', 'key strengths:', 'pros:', 'cons:', 'pricing:', 'overview:']
+    text_lower = text.lower()
+    for header in header_patterns:
+        if header in text_lower:
+            return False
+
+    # Reject questions (text containing '?' early suggests it's a question, not a claim)
+    # Only reject if ? is in first 50 chars (question at start) or text ends with ?
+    if text.strip().endswith('?'):
+        return False
+    if '?' in text[:50]:
         return False
 
     return True
@@ -238,20 +314,29 @@ def find_best_match(
             score = passage_keywords / len(keywords_lower)
             candidates.append((score, passage.strip()))
 
-    # Sort by score descending
-    candidates.sort(key=lambda x: x[0], reverse=True)
+    # Also try sentence triplets for full context (handles "it", "they", "this")
+    for i in range(len(sentences) - 2):
+        passage = sentences[i] + " " + sentences[i + 1] + " " + sentences[i + 2]
+        passage_lower = passage.lower()
+        passage_keywords = sum(1 for kw in keywords_found if kw in passage_lower)
+        if passage_keywords > 0:
+            score = passage_keywords / len(keywords_lower)
+            candidates.append((score, passage.strip()))
+
+    # Sort by score descending, then by length ascending (prefer minimal extraction at same score)
+    # This lets keywords naturally define scope - if they span 3 sentences, we get 3
+    candidates.sort(key=lambda x: (x[0], -len(x[1])), reverse=True)
 
     # Return first candidate that passes quality filter
+    # max_length=500 to allow up to 3 sentences for full context
     for score, text in candidates:
         if score >= min_score:
-            cleaned = clean_extracted_text(text, max_length=300)
+            cleaned = clean_extracted_text(text, max_length=500)
             if is_quality_extraction(cleaned):
                 return cleaned, score
 
-    # Fallback: return best score even if quality filter fails
-    if candidates and candidates[0][0] >= min_score:
-        return clean_extracted_text(candidates[0][1], max_length=300), candidates[0][0]
-
+    # No fallback - if quality filter rejects all candidates, return None
+    # This enforces the quality gate as final arbiter
     return None, candidates[0][0] if candidates else 0.0
 
 
@@ -392,25 +477,42 @@ def format_facts_for_cleanup(extractions: List['Extraction']) -> str:
 # Prompt for LLM to generate pointers
 POINTER_PROMPT = '''Topic: {topic}
 
-Extract ALL concrete facts from each source. Look for:
-- Specific claims with evidence (dates, numbers, names, studies)
-- Key findings or conclusions
-- Definitions or explanations of important concepts
-- Relationships, comparisons, or cause-effect statements
+Extract FACTUAL CLAIMS - single sentences with specific, verifiable information.
 
-Skip: promotional text, opinions without evidence, vague statements.
+CRITICAL: Each fact = ONE sentence. Keywords must all appear in the SAME sentence.
 
-For each fact:
+A fact is a SINGLE DECLARATIVE SENTENCE (under 40 words) that:
+- States a specific claim ("X does Y", "X achieves Z metric")
+- Contains evidence: numbers, metrics, percentages, comparisons
+- Can be verified as true or false
+
+GOOD (one sentence, specific claim):
+✓ "Hamming runs 10,000 concurrent test calls with sub-200ms latency"
+✓ "Coval applies autonomous vehicle testing methodology with 95% coverage"
+✓ "The platform tracks 40+ metrics including latency and error rates"
+
+BAD - DO NOT EXTRACT:
+✗ Product intros: "CompanyName is a platform that..." or "CompanyName: Description..."
+✗ Headers/titles: "Key Features:", "What to Expect", "Overview", section headings
+✗ Questions: "How does X work?" "What should you consider?"
+✗ Multi-sentence passages: If keywords span 2+ sentences, TOO MUCH
+✗ Promotional fluff: "Learn more", "Try our platform", "Best-in-class"
+✗ Vague claims: "Very fast", "Great performance", "Easy to use" (no metrics)
+
+If text has "ProductName: claim", point to keywords in the claim AFTER the colon.
+
+For each fact, keywords must be from ONE sentence:
 - source_id: exactly as shown (src_000, src_001, etc)
-- keywords: 3-5 SINGLE distinctive words from that sentence
+- keywords: 3-5 distinctive words from ONE sentence only
+- context: brief 3-6 word label
 
 Sources:
 {sources}
 
 Output JSON array:
 [
-  {{"source_id": "src_000", "keywords": ["researchers", "discovered", "2024"]}},
-  {{"source_id": "src_001", "keywords": ["study", "participants", "improved"]}}
+  {{"source_id": "src_000", "keywords": ["researchers", "discovered", "2024"], "context": "Research discovery findings"}},
+  {{"source_id": "src_001", "keywords": ["study", "participants", "improved"], "context": "Study participant outcomes"}}
 ]'''
 
 

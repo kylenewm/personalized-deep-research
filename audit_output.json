@@ -1,0 +1,307 @@
+{
+  "query": "How can I run simulation and evaluations for production grade voice agents? What are the top techniques and state of the art methods, as well as companies offering these capabilities?",
+  "sources_count": 15,
+  "extraction": {
+    "total_attempts": 62,
+    "verified": 27,
+    "facts": [
+      {
+        "id": 0,
+        "text": "Every prompt change triggers automated test runs against thousands of scenarios generated from transcripts, prompts, or workflow definitions.",
+        "source_url": "https://www.braintrust.dev/articles/best-voice-agent-evaluation-tools-2025",
+        "context": "Hamming stress testing scale",
+        "score": 0.4
+      },
+      {
+        "id": 1,
+        "text": "Braintrust supports this through audio attachments that let you replay exactly what the agent heard, custom scorers for latency and conversation flow, and Evalion integration for caller simulation.",
+        "source_url": "https://www.braintrust.dev/articles/best-voice-agent-evaluation-tools-2025",
+        "context": "Braintrust voice agent evaluation features",
+        "score": 1.0
+      },
+      {
+        "id": 2,
+        "text": "Automated conversation simulation: Evalion runs simulations with callers that interrupt, express frustration, and change their mind.",
+        "source_url": "https://www.braintrust.dev/articles/best-voice-agent-evaluation-tools-2025",
+        "context": "Evalion caller simulation capabilities",
+        "score": 0.6
+      },
+      {
+        "id": 3,
+        "text": "For CI/CD-integrated regression testing, Coval offers simulation with autonomous vehicle methodology.",
+        "source_url": "https://www.braintrust.dev/articles/best-voice-agent-evaluation-tools-2025",
+        "context": "Coval regression testing approach",
+        "score": 0.75
+      },
+      {
+        "id": 4,
+        "text": "You hear the background noise, the user's tone, the awkward pause before they hung up. The platform tracks 40+ metrics and integrates with Hume to detect emotional signals that transcripts miss entirely.",
+        "source_url": "https://www.braintrust.dev/articles/best-voice-agent-evaluation-tools-2025",
+        "context": "Roark production monitoring features",
+        "score": 1.0
+      },
+      {
+        "id": 5,
+        "text": "Where other tools focus on functional testing, Hamming emphasizes regulatory edge cases. It simulates scenarios that could trigger PCI DSS or HIPAA violations, useful for teams in healthcare or financial services who need to prove their agents handle sensitive data correctly under pressure.",
+        "source_url": "https://www.braintrust.dev/articles/best-voice-agent-evaluation-tools-2025",
+        "context": "Hamming compliance testing",
+        "score": 0.8
+      },
+      {
+        "id": 6,
+        "text": "The core idea: simulate thousands of conversational workflows before live deployment, then monitor real-world calls for drift, failures or compliance issues.",
+        "source_url": "https://leapingai.com/blog/comparing-leading-voice-ai-eval-platforms",
+        "context": "Coval simulation and monitoring",
+        "score": 0.75
+      },
+      {
+        "id": 7,
+        "text": "Latency target: Latency is like the heartbeat of your voice experience. If it slows down, the conversation feels robotic. Aim for sub-100 milliseconds so users feel they are talking to a person, not a machine.",
+        "source_url": "https://www.raftlabs.com/blog/top-voice-ai-platforms/",
+        "context": "Voice AI latency benchmark",
+        "score": 0.6666666666666666
+      },
+      {
+        "id": 8,
+        "text": "Speechmatics If you are building something serious on top of speech-to-text, Speechmatics should be on your shortlist. It delivers multi-language accuracy, real-time streaming, and flexible deployment options, whether you prefer cloud or on-prem.",
+        "source_url": "https://www.raftlabs.com/blog/top-voice-ai-platforms/",
+        "context": "Speechmatics transcription capabilities",
+        "score": 1.0
+      },
+      {
+        "id": 9,
+        "text": "LiveKit LiveKit powers real-time voice and video with sub-100 millisecond latency and smooth turn-taking that feels natural to human conversation.",
+        "source_url": "https://www.raftlabs.com/blog/top-voice-ai-platforms/",
+        "context": "LiveKit low-latency infrastructure",
+        "score": 0.6666666666666666
+      },
+      {
+        "id": 10,
+        "text": "Agora Agora is known for its ultra-low-latency Conversational AI Engine built on a global network. It delivers seamless real-time communication with scalable SDKs that perform consistently across regions.",
+        "source_url": "https://www.raftlabs.com/blog/top-voice-ai-platforms/",
+        "context": "Agora real-time communication",
+        "score": 0.5
+      },
+      {
+        "id": 11,
+        "text": "Hamming includes 50+ built-in metrics (latency, hallucinations, sentiment, compliance, repetition, and more) plus unlimited custom scorers you define.",
+        "source_url": "https://hamming.ai/",
+        "context": "Hamming platform performance",
+        "score": 0.5
+      },
+      {
+        "id": 12,
+        "text": "Hamming pioneered automated scenario generation for voice agents\u2014other tools are still catching up.",
+        "source_url": "https://hamming.ai/",
+        "context": "Hamming evaluation accuracy",
+        "score": 0.5
+      },
+      {
+        "id": 13,
+        "text": "Lucy Compliance Manager SOC 2 Type II certified, HIPAA-ready with BAA support. Single-tenant architecture keeps our systems out of PCI scope.",
+        "source_url": "https://hamming.ai/",
+        "context": "Hamming compliance certifications",
+        "score": 0.75
+      },
+      {
+        "id": 14,
+        "text": "LangWatch gives your entire team engineers and domain experts alike a single platform to define evaluations, run experiments, test and simulate AI agents, and monitor production behavior.",
+        "source_url": "https://langwatch.ai/",
+        "context": "LangWatch core capabilities",
+        "score": 1.0
+      },
+      {
+        "id": 15,
+        "text": "b) Pros and Cons of Hamming Why Teams Choose Hamming: Massive scale testing runs thousands of concurrent calls in minutes, replacing weeks of manual testing and saving up to 5,200 hours annually\u200b.",
+        "source_url": "https://futureagi.com/blogs/voice-ai-simulation-cekura-hamming-bluejay-coval-2025",
+        "context": "Hamming runs thousands concurrent calls",
+        "score": 1.0
+      },
+      {
+        "id": 16,
+        "text": "Future AGI Simulate Future AGI Simulate automates voice AI testing by running thousands of realistic scenarios against your agent before real users interact with it.",
+        "source_url": "https://futureagi.com/blogs/voice-ai-simulation-cekura-hamming-bluejay-coval-2025",
+        "context": "Future AGI runs thousands realistic scenarios",
+        "score": 1.0
+      },
+      {
+        "id": 17,
+        "text": "Complete LLM observability, evaluation, and optimization in a single integrated platform rather than managing multiple disconnected tools. No-code integration that gets your team testing quickly without technical barriers or complex setup processes.",
+        "source_url": "https://futureagi.com/blogs/voice-ai-simulation-cekura-hamming-bluejay-coval-2025",
+        "context": "Future AGI multilingual and multi-persona testing",
+        "score": 0.8
+      },
+      {
+        "id": 18,
+        "text": "Cekura provides strong production monitoring with real-time alerts when metrics fail and detailed dashboards showing empathy levels, response times, and conversation trends. You can replay actual customer calls to diagnose recurring problems and understand agent behavior patterns.",
+        "source_url": "https://futureagi.com/blogs/voice-ai-simulation-cekura-hamming-bluejay-coval-2025",
+        "context": "Cekura real-time alerting system",
+        "score": 1.0
+      },
+      {
+        "id": 19,
+        "text": "Built-in prompt versioning system tracks changes and enables instant retesting after updates, catching regressions before they reach production\u200b.",
+        "source_url": "https://futureagi.com/blogs/voice-ai-simulation-cekura-hamming-bluejay-coval-2025",
+        "context": "Hamming built-in prompt versioning",
+        "score": 0.75
+      },
+      {
+        "id": 20,
+        "text": "Multilingual testing supports English, French, German, Hindi, Spanish, and Italian with regional variants, validating language-specific intent handling\u200b.",
+        "source_url": "https://futureagi.com/blogs/voice-ai-simulation-cekura-hamming-bluejay-coval-2025",
+        "context": "Hamming multilingual testing support",
+        "score": 0.875
+      },
+      {
+        "id": 21,
+        "text": "Future AGI Simulate Bluejay uses a \"human simulation\" approach that creates synthetic digital customers mimicking real user behaviors across 500+ variables including languages, accents, emotional states, background noise, and conversation patterns.",
+        "source_url": "https://futureagi.com/blogs/voice-ai-simulation-cekura-hamming-bluejay-coval-2025",
+        "context": "Bluejay human simulation variables",
+        "score": 1.0
+      },
+      {
+        "id": 22,
+        "text": "Massive speed advantage simulates a month of customer interactions in just 5 minutes, replacing 50+ manual test calls with automated testing before every release\u200b.",
+        "source_url": "https://futureagi.com/blogs/voice-ai-simulation-cekura-hamming-bluejay-coval-2025",
+        "context": "Bluejay compresses month interactions",
+        "score": 0.75
+      },
+      {
+        "id": 23,
+        "text": "3.4 Coval Coval is a simulation and evaluation platform for voice and chat agents that applies over ten years of experience from autonomous vehicle testing.",
+        "source_url": "https://futureagi.com/blogs/voice-ai-simulation-cekura-hamming-bluejay-coval-2025",
+        "context": "Coval autonomous vehicle testing heritage",
+        "score": 1.0
+      },
+      {
+        "id": 24,
+        "text": "It excels at CI/CD integration, automatically detecting regressions with every code change, and supports both voice and text agents with customizable environments and metrics.",
+        "source_url": "https://futureagi.com/blogs/voice-ai-simulation-cekura-hamming-bluejay-coval-2025",
+        "context": "Coval CI/CD regression detection",
+        "score": 1.0
+      },
+      {
+        "id": 25,
+        "text": "The integrated system includes evaluation frameworks for accuracy testing, observability for real-time monitoring, prompt optimization tools, guardrails for safety, and tracing for debugging.",
+        "source_url": "https://futureagi.com/blogs/voice-ai-simulation-cekura-hamming-bluejay-coval-2025",
+        "context": "Future AGI full AI lifecycle platform",
+        "score": 0.8
+      },
+      {
+        "id": 26,
+        "text": "The utterance-level adherence is 96.6%, indicating high goal consistency in simulated users.",
+        "source_url": "https://openreview.net/pdf/dab39dfe908c876a52c542e30e4464376edcc482.pdf",
+        "context": "FUSE simulated users 96.6% goal adherence",
+        "score": 0.5
+      }
+    ]
+  },
+  "deduplication": {
+    "before": 27,
+    "after": 27,
+    "removed": 0
+  },
+  "arrangement": {
+    "themes": [
+      {
+        "theme": "Simulation and Automated Testing Techniques",
+        "fact_ids": [
+          5,
+          6,
+          8,
+          16,
+          19,
+          22,
+          25,
+          27
+        ],
+        "fact_count": 8
+      },
+      {
+        "theme": "Platforms and Companies Offering Simulation and Evaluation",
+        "fact_ids": [
+          1,
+          4,
+          7,
+          9,
+          10,
+          13,
+          14,
+          23
+        ],
+        "fact_count": 8
+      },
+      {
+        "theme": "Performance Metrics and Monitoring for Voice Agents",
+        "fact_ids": [
+          2,
+          11,
+          12,
+          17,
+          18,
+          20,
+          24,
+          26
+        ],
+        "fact_count": 8
+      },
+      {
+        "theme": "Latency and Real-Time Infrastructure",
+        "fact_ids": [
+          21
+        ],
+        "fact_count": 1
+      },
+      {
+        "theme": "CI/CD Integration and Regression Testing",
+        "fact_ids": [
+          15
+        ],
+        "fact_count": 1
+      }
+    ],
+    "excluded_ids": [
+      3
+    ]
+  },
+  "synthesis": {
+    "sections": [
+      {
+        "theme": "Simulation and Automated Testing Techniques",
+        "intro": "",
+        "fact_count": 8,
+        "transition_count": 0
+      },
+      {
+        "theme": "Platforms and Companies Offering Simulation and Evaluation",
+        "intro": "",
+        "fact_count": 8,
+        "transition_count": 0
+      },
+      {
+        "theme": "Performance Metrics and Monitoring for Voice Agents",
+        "intro": "",
+        "fact_count": 8,
+        "transition_count": 0
+      },
+      {
+        "theme": "Latency and Real-Time Infrastructure",
+        "intro": "",
+        "fact_count": 1,
+        "transition_count": 0
+      },
+      {
+        "theme": "CI/CD Integration and Regression Testing",
+        "intro": "",
+        "fact_count": 1,
+        "transition_count": 0
+      }
+    ]
+  },
+  "report_stats": {
+    "total_extracted": 62,
+    "total_verified": 27,
+    "total_used": 26,
+    "themes": 5
+  }
+}

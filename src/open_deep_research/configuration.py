@@ -154,6 +154,19 @@ class Configuration(BaseModel):
             }
         }
     )
+    max_sources_per_domain: int = Field(
+        default=3,
+        metadata={
+            "x_oap_ui_config": {
+                "type": "slider",
+                "default": 3,
+                "min": 1,
+                "max": 10,
+                "step": 1,
+                "description": "Maximum sources to keep from any single domain. Prevents echo chamber effect where one site dominates results."
+            }
+        }
+    )
     max_researcher_iterations: int = Field(
         default=6,
         metadata={
@@ -523,6 +536,24 @@ class Configuration(BaseModel):
                 "type": "boolean",
                 "default": True,
                 "description": "Run claim pre-check before report generation. Extracts claims and verifies key terms exist in sources. Adds ~$0.01/run."
+            }
+        }
+    )
+
+    # Trust Level - Controls quality vs readability tradeoff
+    # high: Facts only, zero hallucination risk, adds source quality guidance to prompts
+    # med: Prose with citations, some risk, standard prompts
+    trust_level: str = Field(
+        default="med",
+        metadata={
+            "x_oap_ui_config": {
+                "type": "select",
+                "default": "med",
+                "description": "Trust level for report generation. 'high' = facts only with strict source quality guidance, 'med' = prose with citations",
+                "options": [
+                    {"label": "High (facts only, zero hallucination)", "value": "high"},
+                    {"label": "Medium (prose with citations)", "value": "med"}
+                ]
             }
         }
     )

@@ -16,6 +16,7 @@ from open_deep_research.models import configurable_model
 from open_deep_research.prompts import (
     lead_researcher_prompt,
     transform_messages_into_research_topic_prompt,
+    SOURCE_QUALITY_GUIDANCE_SUPERVISOR,
 )
 from open_deep_research.state import AgentState, ResearchQuestion
 from open_deep_research.utils import (
@@ -107,10 +108,16 @@ async def write_research_brief(state: AgentState, config: RunnableConfig) -> Com
 
     # Step 3: Initialize supervisor with research brief and instructions
     # Use effective values (reduced in test mode)
+    # Source quality guidance is injected when trust_level=high
+    quality_guidance = ""
+    if getattr(configurable, 'trust_level', 'med') == 'high':
+        quality_guidance = SOURCE_QUALITY_GUIDANCE_SUPERVISOR
+
     supervisor_system_prompt = lead_researcher_prompt.format(
         date=get_today_str(),
         max_concurrent_research_units=configurable.get_effective_max_concurrent_research_units(),
-        max_researcher_iterations=configurable.get_effective_max_researcher_iterations()
+        max_researcher_iterations=configurable.get_effective_max_researcher_iterations(),
+        source_quality_guidance=quality_guidance
     )
 
     return Command(
@@ -247,6 +254,11 @@ OPTIONS:
             else:
                 # Human provided an edited brief (substantial text) - use their version
                 print(f"[REVIEW] Human provided edited brief ({len(response_str)} chars).")
+                # Source quality guidance is injected when trust_level=high
+                quality_guidance = ""
+                if getattr(configurable, 'trust_level', 'med') == 'high':
+                    quality_guidance = SOURCE_QUALITY_GUIDANCE_SUPERVISOR
+
                 return Command(
                     goto="research_supervisor",
                     update={
@@ -260,7 +272,8 @@ OPTIONS:
                                 SystemMessage(content=lead_researcher_prompt.format(
                                     date=get_today_str(),
                                     max_concurrent_research_units=configurable.get_effective_max_concurrent_research_units(),
-                                    max_researcher_iterations=configurable.get_effective_max_researcher_iterations()
+                                    max_researcher_iterations=configurable.get_effective_max_researcher_iterations(),
+                                    source_quality_guidance=quality_guidance
                                 )),
                                 HumanMessage(content=response_str)
                             ]

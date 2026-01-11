@@ -73,13 +73,15 @@ async def run_quick_test(
         "configurable": {
             "thread_id": f"test_e2e_{int(time.time())}",  # Unique thread ID
             "test_mode": True,  # Reduces iterations significantly
+            "max_total_sources": 100,  # Full benchmark
             "use_claim_verification": True,  # Enable verification
             "use_tavily_extract": True,  # Use Extract API for cleaner content
             # Disable council if no Anthropic key (council uses both OpenAI + Anthropic)
             "use_council": has_anthropic,
             "use_findings_council": has_anthropic,
-            # Disable clarification for automated testing
+            # Disable clarification and human review for automated testing
             "allow_clarification": False,
+            "review_mode": "none",  # Skip human review checkpoints
         }
     }
 
@@ -188,6 +190,18 @@ async def run_quick_test(
                 print(f"[STATE] Saved to: {state_path}")
             except Exception as e:
                 print(f"[WARN] Could not save state JSON: {e}")
+
+            # Render HTML report using template if hybrid_report is available
+            hybrid_report = result.get("hybrid_report")
+            if hybrid_report:
+                try:
+                    from open_deep_research.render import render_html
+                    html_content = render_html(hybrid_report)
+                    html_path = project_root / f"report_{int(time.time())}.html"
+                    html_path.write_text(html_content)
+                    print(f"[HTML] Rendered to: {html_path}")
+                except Exception as e:
+                    print(f"[WARN] Could not render HTML: {e}")
 
         return result
 

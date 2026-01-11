@@ -1,0 +1,145 @@
+{
+  "description": "Labeled fact pairs for dedup sandbox. is_duplicate: true = same fact, false = different facts",
+  "pairs": [
+    {
+      "id": 1,
+      "fact_a": "Hamming runs 10,000 concurrent test calls with sub-200ms latency",
+      "fact_b": "Hamming runs 10000 concurrent tests with under 200ms latency",
+      "is_duplicate": true,
+      "reason": "Same fact, minor wording difference"
+    },
+    {
+      "id": 2,
+      "fact_a": "Hamming runs 10,000 concurrent test calls with sub-200ms latency",
+      "fact_b": "Hamming runs 5,000 concurrent test calls with sub-180ms latency",
+      "is_duplicate": false,
+      "reason": "Different numbers (10k vs 5k, 200ms vs 180ms)"
+    },
+    {
+      "id": 3,
+      "fact_a": "The platform tracks 40+ metrics including latency and error rates",
+      "fact_b": "Hamming includes 50+ built-in metrics (latency, hallucinations, sentiment, compliance)",
+      "is_duplicate": false,
+      "reason": "Different metric counts (40+ vs 50+), different platforms"
+    },
+    {
+      "id": 4,
+      "fact_a": "LiveKit powers real-time voice with sub-100 millisecond latency",
+      "fact_b": "Agora delivers ultra-low-latency communication with sub-100ms response times",
+      "is_duplicate": false,
+      "reason": "Same metric but different companies (LiveKit vs Agora)"
+    },
+    {
+      "id": 5,
+      "fact_a": "Coval offers CI/CD-integrated regression testing with autonomous vehicle methodology",
+      "fact_b": "Coval excels at CI/CD integration, automatically detecting regressions with every code change",
+      "is_duplicate": true,
+      "reason": "Same company, same feature (CI/CD), different phrasing"
+    },
+    {
+      "id": 6,
+      "fact_a": "Future AGI Simulate automates voice AI testing by running thousands of scenarios",
+      "fact_b": "Future AGI Simulate Bluejay creates synthetic digital customers mimicking real users",
+      "is_duplicate": false,
+      "reason": "Same company but describing different features"
+    },
+    {
+      "id": 7,
+      "fact_a": "The model achieved 95% accuracy on benchmark tests",
+      "fact_b": "The model achieved 95% accuracy on benchmark tests",
+      "is_duplicate": true,
+      "reason": "Identical text"
+    },
+    {
+      "id": 8,
+      "fact_a": "Claude achieved 95% accuracy on the MMLU benchmark",
+      "fact_b": "GPT-4 achieved 95% accuracy on the MMLU benchmark",
+      "is_duplicate": false,
+      "reason": "Same metric but different models (Claude vs GPT-4)"
+    },
+    {
+      "id": 9,
+      "fact_a": "Latency should stay under 500ms for natural conversation",
+      "fact_b": "Response latency should remain below 500 milliseconds for conversations to feel natural",
+      "is_duplicate": true,
+      "reason": "Same claim, paraphrased"
+    },
+    {
+      "id": 10,
+      "fact_a": "Latency should stay under 500ms for natural conversation",
+      "fact_b": "Latency should stay under 200ms for real-time applications",
+      "is_duplicate": false,
+      "reason": "Different thresholds (500ms vs 200ms)"
+    },
+    {
+      "id": 11,
+      "fact_a": "Hamming pioneered automated scenario generation for voice agents",
+      "fact_b": "Hamming was the first to introduce automated scenario generation for voice AI",
+      "is_duplicate": true,
+      "reason": "Same claim about Hamming being first"
+    },
+    {
+      "id": 12,
+      "fact_a": "Braintrust supports audio attachments for replaying agent interactions",
+      "fact_b": "Roark captures actual calls and lets you replay them against updated agent logic",
+      "is_duplicate": false,
+      "reason": "Different platforms (Braintrust vs Roark), similar feature"
+    },
+    {
+      "id": 13,
+      "fact_a": "SOC 2 Type II certified with HIPAA-ready compliance",
+      "fact_b": "SOC 2 Type II certified, HIPAA-ready with BAA support",
+      "is_duplicate": true,
+      "reason": "Same certifications, slight wording difference"
+    },
+    {
+      "id": 14,
+      "fact_a": "Simulates a month of customer interactions in 5 minutes",
+      "fact_b": "Simulates a month of interactions in just five minutes",
+      "is_duplicate": true,
+      "reason": "Same claim (5 minutes = five minutes)"
+    },
+    {
+      "id": 15,
+      "fact_a": "Simulates a month of customer interactions in 5 minutes",
+      "fact_b": "Simulates a week of customer interactions in 10 minutes",
+      "is_duplicate": false,
+      "reason": "Different time scales (month/5min vs week/10min)"
+    },
+    {
+      "id": 16,
+      "fact_a": "Multilingual testing supports English, French, German, Hindi, Spanish, and Italian",
+      "fact_b": "Supports testing in English, Spanish, French, German, and Italian languages",
+      "is_duplicate": true,
+      "reason": "Same languages (minus Hindi), same feature"
+    },
+    {
+      "id": 17,
+      "fact_a": "The utterance-level adherence is 96.6%",
+      "fact_b": "Goal adherence at the utterance level reaches 96.6 percent",
+      "is_duplicate": true,
+      "reason": "Same metric (96.6%)"
+    },
+    {
+      "id": 18,
+      "fact_a": "The utterance-level adherence is 96.6%",
+      "fact_b": "The conversation-level adherence is 94.2%",
+      "is_duplicate": false,
+      "reason": "Different metrics (utterance vs conversation level)"
+    },
+    {
+      "id": 19,
+      "fact_a": "Evalion runs simulations with callers that interrupt and express frustration",
+      "fact_b": "Testing agents that interrupt mid-sentence and change their mind",
+      "is_duplicate": true,
+      "reason": "Same feature (interruption simulation)"
+    },
+    {
+      "id": 20,
+      "fact_a": "Built-in prompt versioning tracks changes and enables instant retesting",
+      "fact_b": "Automatic prompt version control with regression testing on each change",
+      "is_duplicate": true,
+      "reason": "Same feature (prompt versioning + testing)"
+    }
+  ]
+}

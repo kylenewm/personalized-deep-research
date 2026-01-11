@@ -133,7 +133,16 @@ After each ConductResearch tool call, use think_tool to analyze the results:
 - A separate agent will write the final report - you just need to gather information
 - When calling ConductResearch, provide complete standalone instructions - sub-agents can't see other agents' work
 - Do NOT use acronyms or abbreviations in your research questions, be very clear and specific
-</Scaling Rules>"""
+</Scaling Rules>
+{source_quality_guidance}"""
+
+# Source quality guidance block for supervisor - injected when trust_level=high
+SOURCE_QUALITY_GUIDANCE_SUPERVISOR = """
+<Source Quality Check>
+After each ConductResearch call, briefly assess in your think_tool reflection: are results mostly from authoritative sources (official docs, academic papers, established news)?
+If results are dominated by unknown blogs or aggregator sites, consider more targeted research with specific authoritative sources in mind.
+</Source Quality Check>
+"""
 
 research_system_prompt = """You are a research assistant conducting research on the user's input topic. For context, today's date is {date}.
 
@@ -180,6 +189,14 @@ After each search tool call, use think_tool to analyze the results:
 - Do I have enough to answer the question comprehensively?
 - Should I search more or provide my answer?
 </Show Your Thinking>
+{source_quality_guidance}"""
+
+# Source quality guidance block - injected when trust_level=high
+SOURCE_QUALITY_GUIDANCE_RESEARCHER = """
+<Source Quality>
+Prefer authoritative sources: official documentation, academic papers, established news outlets, and primary sources over blogs and aggregator sites.
+When evaluating search results, prioritize content from recognized institutions, peer-reviewed publications, and official company/organization pages.
+</Source Quality>
 """
 
 
