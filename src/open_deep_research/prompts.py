@@ -136,7 +136,7 @@ After each ConductResearch tool call, use think_tool to analyze the results:
 </Scaling Rules>
 {source_quality_guidance}"""
 
-# Source quality guidance block for supervisor - injected when trust_level=high
+# Source quality guidance block for supervisor - injected when prefer_authoritative_sources=True
 SOURCE_QUALITY_GUIDANCE_SUPERVISOR = """
 <Source Quality Check>
 After each ConductResearch call, briefly assess in your think_tool reflection: are results mostly from authoritative sources (official docs, academic papers, established news)?
@@ -191,7 +191,7 @@ After each search tool call, use think_tool to analyze the results:
 </Show Your Thinking>
 {source_quality_guidance}"""
 
-# Source quality guidance block - injected when trust_level=high
+# Source quality guidance block - injected when prefer_authoritative_sources=True
 SOURCE_QUALITY_GUIDANCE_RESEARCHER = """
 <Source Quality>
 Prefer authoritative sources: official documentation, academic papers, established news outlets, and primary sources over blogs and aggregator sites.

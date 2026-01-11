@@ -32,10 +32,10 @@ from open_deep_research.pipeline_v2 import (
     HybridReport,
     ThemedSection,
 )
-from open_deep_research.render import render_html, render_high_trust, report_to_dict
+from open_deep_research.render import render_html, report_to_dict
 
 
-async def run_audit(fixture_name: str = None, verbose: bool = False, trust_level: str = "med"):
+async def run_audit(fixture_name: str = None, verbose: bool = False):
     """Run pipeline with full audit output."""
 
     # Load fixture
@@ -227,61 +227,31 @@ For duplicates, keep the best-worded one and reject others."""
     # STAGE 4: SYNTHESIS
     # =========================================================================
     print("\n" + "=" * 80)
-    if trust_level == "high":
-        print("STAGE 4: SYNTHESIS (SKIPPED - High trust mode)")
-        print("=" * 80, flush=True)
-        sections = []
-        for group in arranged.groups:
-            facts = [deduped[fid - 1] for fid in group.fact_ids if 1 <= fid <= len(deduped)]
-            sections.append(ThemedSection(
-                theme=group.theme,
-                prose="",
-                citations=[],
-                facts=facts
-            ))
-            print(f"  {group.theme}: {len(facts)} facts (no AI synthesis)")
-    else:
-        print("STAGE 4: SYNTHESIS (Writing prose with citations)")
-        print("=" * 80, flush=True)
-        sections = []
-        for group in arranged.groups:
-            print(f"  Synthesizing '{group.theme}' ({len(group.fact_ids)} facts)...", flush=True)
-            section = await synthesize_theme(group.theme, group.fact_ids, deduped, query, llm_call_fast)
-            sections.append(section)
-            print(f"    -> {len(section.prose)} chars, {len(section.citations)} citations")
+    print("STAGE 4: SYNTHESIS (Writing prose with citations)")
+    print("=" * 80, flush=True)
+    sections = []
+    for group in arranged.groups:
+        print(f"  Synthesizing '{group.theme}' ({len(group.fact_ids)} facts)...", flush=True)
+        section = await synthesize_theme(group.theme, group.fact_ids, deduped, query, llm_call_fast)
+        sections.append(section)
+        print(f"    -> {len(section.prose)} chars, {len(section.citations)} citations")
 
-        for section in sections:
-            print(f"\n[{section.theme}]")
-            print(f"  Prose: {section.prose[:150]}..." if section.prose else "  (no prose)")
-            print(f"  Facts: {len(section.facts)}")
-            print(f"  Citations: {len(section.citations)}")
+    for section in sections:
+        print(f"\n[{section.theme}]")
+        print(f"  Prose: {section.prose[:150]}..." if section.prose else "  (no prose)")
+        print(f"  Facts: {len(section.facts)}")
+        print(f"  Citations: {len(section.citations)}")
 
     # =========================================================================
     # STAGE 5: ASSEMBLY
     # =========================================================================
     print("\n" + "=" * 80)
-    if trust_level == "high":
-        print("STAGE 5: ASSEMBLY (SKIPPED - High trust mode)")
-        print("=" * 80)
-        total_used = sum(len(s.facts) for s in sections)
-        report = HybridReport(
-            title="Research Report",
-            executive_summary="",
-            sections=sections,
-            analysis="",
-            conclusion="",
-            total_extracted=len(extractions),
-            total_verified=len(verified),
-            total_used=total_used
-        )
-        print(f"  No AI content generated")
-    else:
-        print("STAGE 5: ASSEMBLY (Executive summary, analysis, conclusion)")
-        print("=" * 80)
-        report = await assemble_report(sections, query, "Research Report", llm_call_fast, len(sources), len(verified))
-        print(f"Executive summary: {len(report.executive_summary)} chars")
-        print(f"Analysis: {len(report.analysis)} chars")
-        print(f"Conclusion: {len(report.conclusion)} chars")
+    print("STAGE 5: ASSEMBLY (Executive summary, analysis, conclusion)")
+    print("=" * 80)
+    report = await assemble_report(sections, query, "Research Report", llm_call_fast, len(sources), len(verified))
+    print(f"Executive summary: {len(report.executive_summary)} chars")
+    print(f"Analysis: {len(report.analysis)} chars")
+    print(f"Conclusion: {len(report.conclusion)} chars")
 
     # =========================================================================
     # SAVE OUTPUTS
@@ -350,13 +320,10 @@ For duplicates, keep the best-worded one and reject others."""
 
     # Save HTML report
     data = report_to_dict(report)
-    if trust_level == "high":
-        html = render_high_trust(data)
-    else:
-        html = render_html(data)
+    html = render_html(data)
     html_path = project_root / "audit_report.html"
     html_path.write_text(html)
-    print(f"HTML report: {html_path} (trust_level={trust_level})")
+    print(f"HTML report: {html_path}")
 
     print("\n" + "=" * 80)
     print("DONE")
@@ -367,21 +334,11 @@ def main():
     args = sys.argv[1:]
     verbose = "--verbose" in args or "-v" in args
 
-    # Parse trust level
-    trust_level = "med"
-    for arg in args:
-        if arg.startswith("--trust="):
-            trust_level = arg.split("=")[1]
-        elif arg == "--trust":
-            idx = args.index(arg)
-            if idx + 1 < len(args):
-                trust_level = args[idx + 1]
-
     # Filter out flags to get fixture name
-    args = [a for a in args if not a.startswith("-") and a not in ["high", "med", "low"]]
+    args = [a for a in args if not a.startswith("-")]
     fixture_name = args[0] if args else None
 
-    asyncio.run(run_audit(fixture_name, verbose, trust_level))
+    asyncio.run(run_audit(fixture_name, verbose))
 
 
 if __name__ == "__main__":

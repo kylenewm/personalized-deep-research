@@ -6,14 +6,13 @@ Deep Research Agent — AI-powered research agent that searches the web, gathers
 
 ## Current Status
 
-**Source quality guidance implemented. All sandboxes passing.**
+**Simplified: High trust mode removed. Source quality now a simple boolean flag.**
 
 | Component | Status |
 |-----------|--------|
 | Pipeline v2 | ✅ Working - pointer extraction + safeguarded synthesis |
-| Trust modes | ✅ ADDED - `high` (facts only) and `med` (prose + citations) |
-| Source quality | ✅ ADDED - per-domain limit + prompt guidance for trust=high |
-| Render module | 🔧 CSS ISSUES - two-column layout broken, needs fixes |
+| Source quality | ✅ `prefer_authoritative_sources` flag (default true) |
+| Render module | ✅ CSS FIXED - two-column layout, footnotes styling |
 | Retry logic | ✅ ADDED - exponential backoff on rate limits |
 | Upstream sandboxes | ✅ Built - researcher, search, brief |
 | Extraction quality | ✅ IMPROVED - avg 24 words, zero > 50 words, zero artifacts |
@@ -89,30 +88,24 @@ Deep Research Agent — AI-powered research agent that searches the web, gathers
 - `scripts/dedup_sandbox.py` - Tests against 20 labeled pairs
 - `tests/fixtures/dedup_labeled_pairs.json` - Ground truth pairs
 
-### Trust-Level Modes
+### Source Quality Configuration
 
-**Problem:** Tradeoff between readability (AI prose) and trust (verified facts only). Different use cases need different balances.
+**Problem:** Need balance between authoritative sources (official docs, papers) and diverse sources (blogs, user opinions). Different queries need different balances.
 
-**Solution:** Added `trust_level` config with two modes:
+**Solution:** Added `prefer_authoritative_sources` boolean (default: True)
 
-| Mode | Trust | Readability | Use Case |
-|------|-------|-------------|----------|
-| `high` | Zero hallucination risk | Lower (facts only) | Legal, compliance, research |
-| `med` | Some risk (marked with [u]) | Higher (prose + facts) | Overview, presentation |
+| Value | Behavior | Use Case |
+|-------|----------|----------|
+| `True` | Prompts encourage official docs, papers, established sources | Standard research, technical queries |
+| `False` | Include diverse sources like blogs, forums, user opinions | Niche topics, "how do people use X" |
 
-### High Trust Mode (facts only)
-
-- Skips synthesis and assembly LLM calls entirely
-- Renders verified facts in card-based layout per theme
-- Progressive disclosure: "Show N more" for long lists
-- Zero AI prose = zero hallucination risk
-
-### Med Trust Mode (prose + citations)
+### Render Output (Simplified)
 
 - AI writes prose with `[N]` citation markers
 - Uncited sentences marked with `[u]` and styled italic
 - Verified facts shown as footnotes grouped by theme
 - Analysis/Conclusion sections hidden (code preserved)
+- Sources & Evidence section serves as "show your work" for raw facts
 
 ### Pipeline Parallelization
 
@@ -155,30 +148,24 @@ CHUNK_THRESHOLD = 100000  # Effectively disabled
 
 ## Current Work
 
-### Source Quality Guidance (COMPLETE)
+### Simplification Complete
 
-**Goal:** Add source quality guidance tied to `trust_level`. When trust=high, prompts encourage preferring authoritative sources.
-
-**Approach:**
-- Tie to existing `trust_level` (no new config flags)
-- Add prompt guidance to 4 prompts (researcher, supervisor, arranger, synthesis)
-- Add per-domain limit (max 3 per domain) - always on
+**Changes Made:**
+1. ✅ Removed high trust mode entirely (redundant with Sources & Evidence section)
+2. ✅ Replaced `trust_level` with `prefer_authoritative_sources: bool` (default True)
+3. ✅ Source quality guidance now controlled by boolean flag
+4. ✅ Fixed CSS: two-column layout, footnotes styling (serif headers, tighter spacing)
+5. ✅ Content balance: columns now balanced by content length, not section count
 
 **Implementation:**
-1. ✅ Plan approved
-2. ✅ Added `max_sources_per_domain: int = 3` to configuration.py
-3. ✅ Implemented per-domain limit in utils.py:tavily_search()
-4. ✅ Added quality guidance to 4 prompts (conditional on trust=high):
-   - `research_system_prompt` - prefer authoritative sources
-   - `lead_researcher_prompt` - quality check after research
-   - `ARRANGER_PROMPT` - prefer facts from authoritative sources
-   - `THEME_SYNTHESIS_PROMPT` - cite authoritative sources first
-5. ✅ Created `quality_sandbox.py` - all tests passing
+- `configuration.py` - `prefer_authoritative_sources: bool = True`
+- 4 prompts inject quality guidance when True: researcher, supervisor, arranger, synthesis
+- Per-domain limit (`max_sources_per_domain: 3`) always on
 
 ## Next Steps
 
-- (Future) Improve citation quality - LLM not citing enough in med trust mode
-- (Future) Implement `trust_level: "low"` for more coverage
+- (Future) Improve citation quality - ensure LLM cites more consistently
+- Test with a fresh query to verify full pipeline
 
 ## Already Tried (Don't Repeat)
 
@@ -193,4 +180,4 @@ CHUNK_THRESHOLD = 100000  # Effectively disabled
 
 ## Last Updated
 
-2026-01-11 — Source quality guidance implemented (per-domain limit + prompt guidance for trust=high). All sandboxes passing.
+2026-01-11 — Simplified: removed high trust mode, replaced with `prefer_authoritative_sources` boolean. CSS fixes complete.

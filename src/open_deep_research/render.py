@@ -91,10 +91,14 @@ def section_to_dict(section: ThemedSection) -> dict:
     }
 
 
-def report_to_dict(report: HybridReport) -> dict:
+def report_to_dict(report: HybridReport, excluded_facts: Optional[List[Extraction]] = None) -> dict:
     """Convert HybridReport object to template-friendly dict.
 
     Assigns global footnote IDs across all sections.
+
+    Args:
+        report: HybridReport object
+        excluded_facts: Optional list of facts not used in themes but still useful as sources
     """
     sections = []
     all_footnotes = []  # All facts with global IDs
@@ -136,6 +140,16 @@ def report_to_dict(report: HybridReport) -> dict:
             c["global_id"] = fact_id_map.get(c["fact_index"], 0)
 
         sections.append(section_dict)
+
+    # Add excluded facts (not in any theme) as additional sources
+    if excluded_facts:
+        for fact in excluded_facts:
+            fact_dict = fact_to_dict(fact)
+            fact_dict["global_id"] = global_id
+            fact_dict["cited"] = False
+            fact_dict["theme"] = "Additional Sources"
+            all_footnotes.append(fact_dict)
+            global_id += 1
 
     return {
         "title": report.title,
@@ -191,7 +205,28 @@ def render_prose_with_citations(prose: str, citations: list) -> str:
     for c in citations:
         marker_to_global[c["marker"]] = c["global_id"]
 
-    # Replace [N] with superscript links
+    # First, mark sentences without citations BEFORE converting to HTML
+    # A sentence is "cited" if it ends with punctuation followed by [N]
+    # Pattern: sentence ending (. ! ?) NOT followed by optional space + [N]
+    def mark_uncited_sentences(text):
+        # Split into segments: (sentence + optional citation)
+        # Match: text ending in .!? optionally followed by space and [N]
+        pattern = r'([^.!?]*[.!?])(\s*\[\d+\])?'
+        result = []
+        for match in re.finditer(pattern, text):
+            sentence = match.group(1)
+            citation = match.group(2) or ""
+            if citation.strip():
+                # Has citation - keep as-is
+                result.append(sentence + citation)
+            else:
+                # No citation - mark as unverified
+                result.append(f'<span class="unverified">{sentence}</span>')
+        return ' '.join(result) if result else text
+
+    marked = mark_uncited_sentences(prose)
+
+    # Now replace [N] markers with superscript links
     def replace_citation(match):
         marker = match.group(0)
         global_id = marker_to_global.get(marker, 0)
@@ -199,21 +234,7 @@ def render_prose_with_citations(prose: str, citations: list) -> str:
             return f'<sup><a href="#fn{global_id}" class="citation">[{global_id}]</a></sup>'
         return marker
 
-    result = re.sub(r'\[\d+\]', replace_citation, prose)
-
-    # Mark sentences without citations as unverified
-    # Split by sentence endings, check each for citation links
-    sentences = re.split(r'(?<=[.!?])\s+', result)
-    marked_sentences = []
-    for sent in sentences:
-        if sent.strip():
-            # If sentence has no citation link, mark as unverified
-            if 'class="citation"' not in sent:
-                marked_sentences.append(f'<span class="unverified">{sent}</span>')
-            else:
-                marked_sentences.append(sent)
-
-    return ' '.join(marked_sentences)
+    return re.sub(r'\[\d+\]', replace_citation, marked)
 
 
 def render_section_html(section: dict) -> str:
@@ -248,10 +269,6 @@ def render_footnote_html(fact: dict) -> str:
     domain = fact.get("source_domain") or ""
     extracted = fact.get("extracted_text", "")
     url = fact.get("source_url", "")
-
-    # Truncate long extractions for cleaner display
-    if len(extracted) > 200:
-        extracted = extracted[:200].rsplit(' ', 1)[0] + "..."
 
     # Build meta line: source title / domain
     meta_html = f'<a href="{url}" target="_blank" rel="noopener" class="fn-source">{link_text}</a>'
@@ -411,9 +428,15 @@ def render_html(data: dict, template: Optional[str] = None) -> str:
             color: var(--rule);
         }
 
-        /* Unverified prose - blend in */
+        /* Unverified prose - subtle indicator */
         .unverified {
-            /* No special styling */
+            color: var(--ink-muted);
+        }
+        .unverified::after {
+            content: " [u]";
+            font-size: 0.7em;
+            color: var(--ink-faint);
+            vertical-align: super;
         }
 
         /* Fix column layout */
@@ -547,171 +570,11 @@ def render_html(data: dict, template: Optional[str] = None) -> str:
 </html>'''
 
 
-def render_high_trust(data: dict, template: Optional[str] = None) -> str:
-    """Render report in high trust mode - verified facts only, no AI prose.
-
-    Visual design: Cards per theme, bullet points, generous whitespace.
-    Uses <details>/<summary> for progressive disclosure.
-    """
-    if template is None:
-        template = load_template()
-
-    # Extract CSS from template
-    css_match = re.search(r'<style>(.*?)</style>', template, re.DOTALL)
-    css = css_match.group(1) if css_match else ""
-
-    # High trust specific CSS
-    high_trust_css = '''
-        /* High trust mode - facts only */
-        .theme-card {
-            background: var(--paper);
-            border: 1px solid var(--rule);
-            border-radius: 8px;
-            padding: 1.5rem;
-            margin-bottom: 1.5rem;
-        }
-        .theme-header {
-            font-family: var(--sans);
-            font-size: 0.75rem;
-            font-weight: 600;
-            text-transform: uppercase;
-            letter-spacing: 0.05em;
-            color: var(--ink-muted);
-            margin: 0 0 1rem 0;
-            padding-bottom: 0.75rem;
-            border-bottom: 1px solid var(--rule-light);
-        }
-        .fact-item {
-            display: flex;
-            gap: 0.75rem;
-            padding: 0.75rem 0;
-            border-bottom: 1px solid var(--rule-light);
-        }
-        .fact-item:last-child {
-            border-bottom: none;
-        }
-        .fact-bullet {
-            color: var(--verified);
-            font-size: 0.875rem;
-            margin-top: 0.125rem;
-        }
-        .fact-content {
-            flex: 1;
-        }
-        .fact-content .fact-text {
-            font-size: 0.9375rem;
-            line-height: 1.6;
-            color: var(--ink);
-            margin: 0 0 0.375rem 0;
-        }
-        .fact-content .fact-source {
-            font-family: var(--sans);
-            font-size: 0.75rem;
-            color: var(--verified);
-            text-decoration: none;
-        }
-        .fact-content .fact-source:hover {
-            text-decoration: underline;
-        }
-        details.more-facts {
-            margin-top: 0.5rem;
-        }
-        details.more-facts summary {
-            font-family: var(--sans);
-            font-size: 0.8rem;
-            color: var(--accent);
-            cursor: pointer;
-            padding: 0.5rem 0;
-        }
-        details.more-facts summary:hover {
-            text-decoration: underline;
-        }
-        .high-trust-notice {
-            font-family: var(--sans);
-            font-size: 0.75rem;
-            color: var(--verified);
-            background: var(--verified-bg);
-            padding: 0.5rem 1rem;
-            border-radius: 4px;
-            margin-bottom: 1.5rem;
-        }
-    '''
-
-    # Build theme cards
-    sections = data.get("sections", [])
-    theme_cards = []
-
-    for section in sections:
-        facts = section.get("facts", [])
-        facts_html = []
-        visible_count = 5  # Show first 5
-
-        for i, fact in enumerate(facts):
-            link_text = fact.get("source_title") or fact.get("source_domain") or "Source"
-            fact_html = f'''<div class="fact-item">
-                <span class="fact-bullet">▸</span>
-                <div class="fact-content">
-                    <p class="fact-text">{fact.get("extracted_text", "")}</p>
-                    <a href="{fact.get("source_url", "")}" target="_blank" rel="noopener" class="fact-source">{link_text}</a>
-                </div>
-            </div>'''
-
-            if i < visible_count:
-                facts_html.append(fact_html)
-            elif i == visible_count:
-                # Start the details block
-                facts_html.append(f'<details class="more-facts"><summary>Show {len(facts) - visible_count} more findings</summary>')
-                facts_html.append(fact_html)
-            else:
-                facts_html.append(fact_html)
-
-        # Close details if we opened it
-        if len(facts) > visible_count:
-            facts_html.append('</details>')
-
-        card = f'''<div class="theme-card">
-            <h3 class="theme-header">{section.get("theme", "Findings")}</h3>
-            <div class="facts-list">
-                {chr(10).join(facts_html)}
-            </div>
-        </div>'''
-        theme_cards.append(card)
-
-    stats = data.get("stats", {})
-
-    return f'''<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="utf-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>{data.get("title", "Research Report")}</title>
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Source+Serif+4:opsz,wght@8..60,400;8..60,600&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
-    <style>{css}{high_trust_css}</style>
-</head>
-<body>
-
-<header>
-    <p class="overline">Research Report</p>
-    <h1>{data.get("title", "")}</h1>
-</header>
-
-<div class="container" style="max-width: 800px; margin: 0 auto; padding: 0 1rem;">
-
-    <div class="high-trust-notice">
-        ✓ High Trust Mode: All content below is verified from sources. No AI-generated prose.
-    </div>
-
-    {chr(10).join(theme_cards)}
-
-</div>
-
-</body>
-</html>'''
-
-
-def render_report(report: HybridReport, template_name: str = DEFAULT_TEMPLATE, trust_level: str = "med") -> str:
+def render_report(
+    report: HybridReport,
+    template_name: str = DEFAULT_TEMPLATE,
+    excluded_facts: Optional[List[Extraction]] = None
+) -> str:
     """Render a HybridReport object to HTML.
 
     This is the main entry point for rendering reports from the pipeline.
@@ -719,18 +582,14 @@ def render_report(report: HybridReport, template_name: str = DEFAULT_TEMPLATE, t
     Args:
         report: HybridReport object from pipeline_v2
         template_name: Template file to use (default: report.html)
-        trust_level: "high" (facts only) or "med" (prose with citations)
+        excluded_facts: Optional list of facts not used in themes but still useful as sources
 
     Returns:
         Rendered HTML string
     """
     template = load_template(template_name)
-    data = report_to_dict(report)
-
-    if trust_level == "high":
-        return render_high_trust(data, template)
-    else:
-        return render_html(data, template)
+    data = report_to_dict(report, excluded_facts=excluded_facts)
+    return render_html(data, template)
 
 
 # =============================================================================

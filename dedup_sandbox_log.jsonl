@@ -1,6 +1,0 @@
-{"timestamp": "2026-01-10T23:04:49.092596", "pairs_count": 20, "threshold_tested": "all"}
-{"timestamp": "2026-01-10T23:06:00.254743", "pairs_count": 20, "threshold_tested": "all"}
-{"timestamp": "2026-01-10T23:08:55.653598", "pairs_count": 20, "threshold_tested": "all"}
-{"timestamp": "2026-01-10T23:14:07.110689", "method": "llm", "pairs_count": 20, "accuracy": 0.75, "f1": 0.761904761904762, "fp_rate": 0.2222222222222222}
-{"timestamp": "2026-01-10T23:14:55.373120", "method": "llm", "pairs_count": 20, "accuracy": 0.85, "f1": 0.8421052631578948, "fp_rate": 0.0}
-{"timestamp": "2026-01-10T23:45:11.134961", "method": "llm", "pairs_count": 20, "accuracy": 0.75, "f1": 0.7826086956521738, "fp_rate": 0.3333333333333333}

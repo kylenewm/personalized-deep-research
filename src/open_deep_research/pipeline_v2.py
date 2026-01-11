@@ -101,6 +101,9 @@ class HybridReport:
     total_verified: int = 0
     total_used: int = 0
 
+    # Facts excluded from themes but still valid sources
+    excluded_facts: List[Extraction] = field(default_factory=list)
+
     @property
     def verified_count(self) -> int:
         return sum(len(s.facts) for s in self.sections)
@@ -667,7 +670,7 @@ CRITICAL:
 
 Output ONLY valid JSON.'''
 
-# Source quality guidance for arranger - injected when trust_level=high
+# Source quality guidance for arranger - injected when prefer_authoritative_sources=True
 ARRANGER_QUALITY_GUIDANCE = """
 5. SOURCE QUALITY PREFERENCE:
    - When choosing between similar facts, prefer those from authoritative sources
@@ -744,7 +747,7 @@ async def arrange_facts(
     verified_extractions: List[Extraction],
     topic: str,
     llm_call,
-    trust_level: str = "med"
+    prefer_authoritative_sources: bool = True
 ) -> CuratedFacts:
     """Group and curate verified facts.
 
@@ -752,13 +755,13 @@ async def arrange_facts(
         verified_extractions: List of verified extractions only
         topic: Research topic
         llm_call: Async LLM function
-        trust_level: "high" or "med" - controls source quality guidance
+        prefer_authoritative_sources: If True, inject source quality guidance
 
     Returns:
         CuratedFacts with theme groups and excluded list
     """
-    # Source quality guidance is injected when trust_level=high
-    quality_guidance = ARRANGER_QUALITY_GUIDANCE if trust_level == "high" else ""
+    # Source quality guidance is injected when prefer_authoritative_sources=True
+    quality_guidance = ARRANGER_QUALITY_GUIDANCE if prefer_authoritative_sources else ""
 
     facts_text = format_facts_for_arranger(verified_extractions)
     prompt = ARRANGER_PROMPT.format(
@@ -812,7 +815,7 @@ Output JSON:
   "cited_ids": [1, 3, 5, ...]  // Numbers of facts you cited
 }}'''
 
-# Source quality guidance for synthesis - injected when trust_level=high
+# Source quality guidance for synthesis - injected when prefer_authoritative_sources=True
 SYNTHESIS_QUALITY_GUIDANCE = """
 6. When multiple sources support a claim, cite the more authoritative source first
    (official docs, academic papers) before less authoritative ones (blogs).
@@ -843,7 +846,7 @@ async def synthesize_theme(
     all_verified: List[Extraction],
     topic: str,
     llm_call,
-    trust_level: str = "med"
+    prefer_authoritative_sources: bool = True
 ) -> ThemedSection:
     """Synthesize a single theme section with prose and citations.
 
@@ -853,13 +856,13 @@ async def synthesize_theme(
         all_verified: All verified extractions (for lookup)
         topic: Research topic
         llm_call: Async LLM function
-        trust_level: "high" or "med" - controls source quality guidance
+        prefer_authoritative_sources: If True, inject source quality guidance
 
     Returns:
         ThemedSection with prose, citations, and facts
     """
-    # Source quality guidance is injected when trust_level=high
-    quality_guidance = SYNTHESIS_QUALITY_GUIDANCE if trust_level == "high" else ""
+    # Source quality guidance is injected when prefer_authoritative_sources=True
+    quality_guidance = SYNTHESIS_QUALITY_GUIDANCE if prefer_authoritative_sources else ""
 
     facts_text = format_theme_facts([], fact_ids, all_verified)
     prompt = THEME_SYNTHESIS_PROMPT.format(
@@ -1313,7 +1316,7 @@ def render_html(report: HybridReport) -> str:
         from .render import render_report
     except ImportError:
         from render import render_report
-    return render_report(report)
+    return render_report(report, excluded_facts=report.excluded_facts)
 
 
 # =============================================================================
@@ -1328,7 +1331,7 @@ async def run_pipeline_v2(
     batch_size: int = BATCH_SIZE,
     min_score: float = DEFAULT_MIN_SCORE,
     on_progress=None,  # callback(stage, message)
-    trust_level: str = "med"  # "high" = facts only, "med" = prose with citations
+    prefer_authoritative_sources: bool = True  # Add quality guidance to prompts
 ) -> HybridReport:
     """Run the full three-stage pipeline.
 
@@ -1340,7 +1343,7 @@ async def run_pipeline_v2(
         batch_size: Sources per extraction batch
         min_score: Verification threshold
         on_progress: Progress callback
-        trust_level: "high" (facts only) or "med" (prose with citations)
+        prefer_authoritative_sources: If True, inject source quality guidance into prompts
 
     Returns:
         HybridReport ready for rendering
@@ -1385,58 +1388,36 @@ async def run_pipeline_v2(
 
     # Stage 2: Arrange and curate
     progress("ARRANGE", f"Grouping {len(verified)} facts by theme...")
-    curated = await arrange_facts(verified, topic, llm_call, trust_level)
+    curated = await arrange_facts(verified, topic, llm_call, prefer_authoritative_sources)
 
     total_grouped = sum(len(g.fact_ids) for g in curated.groups)
     progress("ARRANGE", f"Created {len(curated.groups)} themes, {total_grouped} facts kept, {len(curated.excluded_ids)} excluded")
 
-    # Stage 3: Per-theme synthesis (or skip for high trust)
-    if trust_level == "high":
-        # High trust: Skip synthesis, just build sections with facts only
-        progress("SYNTHESIZE", f"High trust mode: skipping AI synthesis, using {len(curated.groups)} themes")
-        sections = []
-        for group in curated.groups:
-            facts = [verified[fid - 1] for fid in group.fact_ids if 1 <= fid <= len(verified)]
-            sections.append(ThemedSection(
-                theme=group.theme,
-                prose="",  # No AI prose
-                citations=[],  # No citations needed
-                facts=facts
-            ))
-    else:
-        # Med trust: Synthesize prose with citations
-        theme_names = [g.theme for g in curated.groups]
-        progress("SYNTHESIZE", f"Synthesizing {len(theme_names)} themes in parallel...")
+    # Build list of excluded facts (for Sources & Evidence section)
+    excluded_id_set = set(curated.excluded_ids)
+    excluded_facts = [f for i, f in enumerate(verified) if i in excluded_id_set]
 
-        sections = await asyncio.gather(*[
-            synthesize_theme(group.theme, group.fact_ids, verified, topic, llm_call, trust_level)
-            for group in curated.groups
-        ])
-        sections = list(sections)  # Convert tuple to list
+    # Stage 3: Per-theme synthesis
+    theme_names = [g.theme for g in curated.groups]
+    progress("SYNTHESIZE", f"Synthesizing {len(theme_names)} themes in parallel...")
 
-    # Final assembly (skip analysis for high trust)
-    if trust_level == "high":
-        progress("ASSEMBLE", "High trust mode: minimal assembly (no AI analysis)")
-        # Build report with empty analysis/conclusion
-        total_used = sum(len(s.facts) for s in sections)
-        report = HybridReport(
-            title=title,
-            executive_summary="",  # No AI summary
-            sections=sections,
-            analysis="",  # No AI analysis
-            conclusion="",  # No AI conclusion
-            total_extracted=len(all_extractions),
-            total_verified=len(verified),
-            total_used=total_used
-        )
-    else:
-        progress("ASSEMBLE", "Generating executive summary, analysis, conclusion...")
-        report = await assemble_report(
-            sections, topic, title, llm_call,
-            total_extracted=len(all_extractions),
-            total_verified=len(verified)
-        )
+    sections = await asyncio.gather(*[
+        synthesize_theme(group.theme, group.fact_ids, verified, topic, llm_call, prefer_authoritative_sources)
+        for group in curated.groups
+    ])
+    sections = list(sections)  # Convert tuple to list
+
+    # Final assembly
+    progress("ASSEMBLE", "Generating executive summary, analysis, conclusion...")
+    report = await assemble_report(
+        sections, topic, title, llm_call,
+        total_extracted=len(all_extractions),
+        total_verified=len(verified)
+    )
 
     progress("DONE", f"Report complete: {report.verified_count} verified facts in {len(sections)} themes")
+
+    # Attach excluded facts for Sources & Evidence section
+    report.excluded_facts = excluded_facts
 
     return report

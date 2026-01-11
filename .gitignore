@@ -64,6 +64,34 @@ test_research_output.md
 test_research_state.json
 test_report_output.md
 
+# Generated HTML/PDF reports
+*.html
+!templates/*.html
+report_*.md
+*_report.md
+*_report.html
+*_output.md
+safeguarded_*.md
+quality_fix_report_*.md
+*.pdf
+
+# Sandbox outputs
+*_sandbox_log.jsonl
+sandbox_iterations.jsonl
+sandbox_output/
+
+# Temporary state files
+comparison_state.json
+layered_test_*.json
+audit_output.json
+*_state.json
+
+# Test output directories
+briefs/
+tests/fixtures/search_traces/
+tests/fixtures/research_traces/
+tests/fixtures/briefs/
+
 # Jupyter
 .ipynb_checkpoints/
 

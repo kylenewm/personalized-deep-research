@@ -108,9 +108,9 @@ async def write_research_brief(state: AgentState, config: RunnableConfig) -> Com
 
     # Step 3: Initialize supervisor with research brief and instructions
     # Use effective values (reduced in test mode)
-    # Source quality guidance is injected when trust_level=high
+    # Source quality guidance is injected when prefer_authoritative_sources=True
     quality_guidance = ""
-    if getattr(configurable, 'trust_level', 'med') == 'high':
+    if getattr(configurable, 'prefer_authoritative_sources', True):
         quality_guidance = SOURCE_QUALITY_GUIDANCE_SUPERVISOR
 
     supervisor_system_prompt = lead_researcher_prompt.format(
@@ -254,9 +254,9 @@ OPTIONS:
             else:
                 # Human provided an edited brief (substantial text) - use their version
                 print(f"[REVIEW] Human provided edited brief ({len(response_str)} chars).")
-                # Source quality guidance is injected when trust_level=high
+                # Source quality guidance is injected when prefer_authoritative_sources=True
                 quality_guidance = ""
-                if getattr(configurable, 'trust_level', 'med') == 'high':
+                if getattr(configurable, 'prefer_authoritative_sources', True):
                     quality_guidance = SOURCE_QUALITY_GUIDANCE_SUPERVISOR
 
                 return Command(

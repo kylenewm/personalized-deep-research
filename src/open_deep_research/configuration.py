@@ -540,20 +540,16 @@ class Configuration(BaseModel):
         }
     )
 
-    # Trust Level - Controls quality vs readability tradeoff
-    # high: Facts only, zero hallucination risk, adds source quality guidance to prompts
-    # med: Prose with citations, some risk, standard prompts
-    trust_level: str = Field(
-        default="med",
+    # Source Quality - Prefer authoritative sources in prompts
+    # When True: Prompts encourage preferring official docs, peer-reviewed, established orgs
+    # When False: Include diverse sources like blogs, forums, user opinions (good for niche topics)
+    prefer_authoritative_sources: bool = Field(
+        default=True,
         metadata={
             "x_oap_ui_config": {
-                "type": "select",
-                "default": "med",
-                "description": "Trust level for report generation. 'high' = facts only with strict source quality guidance, 'med' = prose with citations",
-                "options": [
-                    {"label": "High (facts only, zero hallucination)", "value": "high"},
-                    {"label": "Medium (prose with citations)", "value": "med"}
-                ]
+                "type": "boolean",
+                "default": True,
+                "description": "Prefer authoritative sources (official docs, peer-reviewed, established orgs). Disable for niche topics where user opinions and blog posts are valuable."
             }
         }
     )

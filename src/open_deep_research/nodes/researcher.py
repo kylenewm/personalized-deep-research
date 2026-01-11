@@ -169,9 +169,9 @@ async def researcher(state: ResearcherState, config: RunnableConfig) -> Command[
     }
 
     # Prepare system prompt with MCP context and quality guidance if applicable
-    # Source quality guidance is injected when trust_level=high
+    # Source quality guidance is injected when prefer_authoritative_sources=True
     quality_guidance = ""
-    if getattr(configurable, 'trust_level', 'med') == 'high':
+    if getattr(configurable, 'prefer_authoritative_sources', True):
         quality_guidance = SOURCE_QUALITY_GUIDANCE_RESEARCHER
 
     researcher_prompt = research_system_prompt.format(
