@@ -118,6 +118,27 @@ The agent has two ways to verify information:
 
 **Claims Verification** is more flexible (uses embeddings to find relevant passages). It runs after to give an overall confidence score.
 
+## Example Output
+
+Here's a sample from a real research run on multi-agent AI frameworks:
+
+**Query:** *What are the best multi-agent orchestration frameworks for AI coding assistants in 2026? Compare LangGraph, CrewAI, AutoGen...*
+
+**Result:** 73 verified facts across 5 themes in ~4 minutes
+
+| Theme | Sample Finding |
+|-------|----------------|
+| Adoption & Scale | CrewAI: 150+ enterprise customers, 100,000+ daily agent executions |
+| Architecture | LangGraph: Pregel-inspired distributed model with checkpoint-based state |
+| Performance | AutoGen: 82.9% task completion in SWE-bench evaluations |
+| Human-in-Loop | All frameworks support breakpoints; CrewAI adds role-based approval gates |
+| Enterprise Ready | LangGraph integrates with LangSmith for observability at scale |
+
+**Sample prose with citations:**
+> By mid-2025, CrewAI demonstrated significant enterprise adoption with over 150 enterprise customers and more than 100,000 daily agent executions [1][4]. Meanwhile, LangGraph's Pregel-inspired architecture enables distributed state management across agent nodes [7], while AutoGen achieved 82.9% on SWE-bench coding benchmarks [12].
+
+Full dataset: `tests/fixtures/gold_queries/agentic_coding_2026.json`
+
 ## Setup
 
 ```bash
@@ -253,6 +274,11 @@ Use metrics to track optimization progress across runs.
   - State management
   - Anti-hallucination system
   - Key files reference
+
+- **[docs/EVAL_OVERVIEW.md](./docs/EVAL_OVERVIEW.md)** - Evaluation system guide
+  - Brief, upstream, downstream metrics
+  - Running evals on gold datasets
+  - Quality thresholds and baselines
 
 ## Next Steps
 
