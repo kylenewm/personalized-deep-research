@@ -206,22 +206,21 @@ def render_prose_with_citations(prose: str, citations: list) -> str:
         marker_to_global[c["marker"]] = c["global_id"]
 
     # First, mark sentences without citations BEFORE converting to HTML
-    # A sentence is "cited" if it ends with punctuation followed by [N]
-    # Pattern: sentence ending (. ! ?) NOT followed by optional space + [N]
+    # A sentence is "cited" if it CONTAINS [N] anywhere (not just after punctuation)
     def mark_uncited_sentences(text):
-        # Split into segments: (sentence + optional citation)
-        # Match: text ending in .!? optionally followed by space and [N]
-        pattern = r'([^.!?]*[.!?])(\s*\[\d+\])?'
+        # Split on sentence boundaries (.!?) while keeping the delimiter
+        parts = re.split(r'(?<=[.!?])\s+', text)
         result = []
-        for match in re.finditer(pattern, text):
-            sentence = match.group(1)
-            citation = match.group(2) or ""
-            if citation.strip():
+        for part in parts:
+            if not part.strip():
+                continue
+            # Check if this sentence contains ANY citation marker
+            if re.search(r'\[\d+\]', part):
                 # Has citation - keep as-is
-                result.append(sentence + citation)
+                result.append(part)
             else:
                 # No citation - mark as unverified
-                result.append(f'<span class="unverified">{sentence}</span>')
+                result.append(f'<span class="unverified">{part}</span>')
         return ' '.join(result) if result else text
 
     marked = mark_uncited_sentences(prose)
@@ -346,13 +345,10 @@ def render_html(data: dict, template: Optional[str] = None) -> str:
             margin-bottom: 1rem;
         }
 
-        /* Footnotes section - full width, 3 columns */
+        /* Footnotes section - contained width, 3 columns */
         .footnotes-section {
             margin-top: 3rem;
-            margin-left: calc(50% - 50vw);
-            margin-right: calc(50% - 50vw);
-            width: 100vw;
-            padding: 2rem max(2rem, calc(50vw - 700px));
+            padding: 2rem 0;
             background: var(--paper);
             border-top: 1px solid var(--rule);
             column-count: 3;
@@ -562,9 +558,9 @@ def render_html(data: dict, template: Optional[str] = None) -> str:
     </div>
     -->
 
-    {footnotes_html}
-
 </div>
+
+{footnotes_html}
 
 </body>
 </html>'''

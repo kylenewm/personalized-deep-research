@@ -6,19 +6,20 @@ Deep Research Agent — AI-powered research agent that searches the web, gathers
 
 ## Current Status
 
-**Simplified: High trust mode removed. Source quality now a simple boolean flag.**
+**QUALITY ISSUES FOUND: Three architectural gaps identified**
 
 | Component | Status |
 |-----------|--------|
 | Pipeline v2 | ✅ Working - pointer extraction + safeguarded synthesis |
-| Source quality | ✅ `prefer_authoritative_sources` flag (default true) |
-| Render module | ✅ CSS FIXED - two-column layout, footnotes styling |
+| Source quality | ⚠️ SOFT ONLY - `prefer_authoritative_sources` is prompt hint, no hard filtering |
+| Render module | ✅ FIXED - proper template, citations, footnotes layout |
+| Synthesis | ✅ FIXED - plain prose output, no JSON artifacts |
+| Citation marking | ✅ FIXED - correctly identifies cited vs uncited sentences |
 | Retry logic | ✅ ADDED - exponential backoff on rate limits |
-| Upstream sandboxes | ✅ Built - researcher, search, brief |
 | Extraction quality | ✅ IMPROVED - avg 24 words, zero > 50 words, zero artifacts |
-| Citation quality | ✅ TESTED - 100% citation rate in sandbox |
-| Dedup accuracy | ✅ UPGRADED - LLM semantic dedup, 0% false positives |
+| Dedup accuracy | ⚠️ BATCH-LIMITED - cross-batch duplicates leak through |
 | Arrangement | ✅ TESTED - correct grouping, 56% exclusion of junk |
+| Query specificity | ⚠️ DILUTED - supervisor loses query nuance |
 
 ## Quality Audit: Complete
 
@@ -130,42 +131,109 @@ CHUNK_THRESHOLD = 100000  # Effectively disabled
 
 ## Files Changed This Session
 
-- `src/open_deep_research/pipeline_v2.py`
-  - Added `trust_level` param to `run_pipeline_v2()`
-  - Skip synthesis/assembly for high trust mode
-  - Parallel execution with `asyncio.gather()`
+- `src/open_deep_research/nodes/safeguarded_report.py`
+  - Changed import from `render_hybrid_report` to `render_report` from render.py
+  - Line 136: now calls `render_report(report)` for proper template rendering
 
 - `src/open_deep_research/render.py`
-  - Added `render_high_trust()` function with card layout
-  - Added `render_prose_with_citations()` for `[u]` markers
-  - Hidden Analysis/Conclusion sections in med trust mode
+  - Fixed `render_prose_with_citations()` regex - now checks if sentence CONTAINS citation
+  - Fixed footnotes layout - moved outside `.columns` div
+  - Simplified `.footnotes-section` CSS - removed broken `calc(50vw)` hack
 
-- `scripts/audit_pipeline.py`
-  - Added `--trust` flag (`--trust=high` or `--trust med`)
+- `src/open_deep_research/pipeline_v2.py`
+  - Removed JSON output requirement from `THEME_SYNTHESIS_PROMPT`
+  - Now outputs plain prose only with `[N]` citations inline
+  - Simplified response parsing: `prose = response.strip()`
 
-- `tests/fixtures/gold_queries/voice_agent_eval.json`
-  - Saved fixture: 96 sources for voice agent simulation testing
+- `tests/fixtures/gold_queries/latest_research.json`
+  - Voice agent orchestration query fixture (42 sources)
 
 ## Current Work
 
-### Simplification Complete
+### E2E Test Run: Agentic Orchestration (2026-01-12)
 
-**Changes Made:**
-1. ✅ Removed high trust mode entirely (redundant with Sources & Evidence section)
-2. ✅ Replaced `trust_level` with `prefer_authoritative_sources: bool` (default True)
-3. ✅ Source quality guidance now controlled by boolean flag
-4. ✅ Fixed CSS: two-column layout, footnotes styling (serif headers, tighter spacing)
-5. ✅ Content balance: columns now balanced by content length, not section count
+**Query:** "What are the top agentic orchestration methods in 2026 for building long contextual systems?"
 
-**Implementation:**
-- `configuration.py` - `prefer_authoritative_sources: bool = True`
-- 4 prompts inject quality guidance when True: researcher, supervisor, arranger, synthesis
-- Per-domain limit (`max_sources_per_domain: 3`) always on
+**Results:**
+- 70 sources collected
+- 212 verified extractions → 179 after dedup → 172 after cleanup
+- 63 facts kept in 5 themes
+- Report rendered successfully
+
+**Saved:**
+- `tests/fixtures/gold_queries/latest_research.json` - full data
+- `orchestration_2026_report.html` - rendered report
+
+### Quality Issues Found (2026-01-12)
+
+**Issue 1: Duplicate facts leaked through dedup**
+- Facts [11], [14], [16] are identical ("LangGraph 2.2x faster than CrewAI")
+- Root cause: `deduplicate_extractions_llm()` processes in batches of 50
+- Cross-batch duplicates are never compared
+- Location: `pipeline_v2.py:492-550`
+
+**Issue 2: Medium blogs got through despite `prefer_authoritative_sources`**
+- Root cause: Flag is **soft prompt guidance only**, not hard filtering
+- `blocked_domains` exists but only blocks YouTube/Reddit/social media
+- No domain authority scoring at search time
+- Location: `pipeline_v2.py:673-764`
+
+**Issue 3: "Long contextual systems" depth missing**
+- Query asked specifically about long-context techniques
+- Report focused on generic framework comparisons
+- Root cause: Supervisor's `research_topic` diluted query specificity
+- Location: `nodes/supervisor.py:142-168`
+
+### Architectural Gaps Summary
+
+| Issue | Root Cause | Fix Complexity |
+|-------|------------|----------------|
+| Duplicate facts | Batch dedup (50/batch) - no global pass | Medium |
+| Low-quality sources | `prefer_authoritative_sources` is prompt-only | Medium |
+| Lost query specificity | Supervisor dilutes research_topic | Hard |
+
+### Previous E2E Test (2026-01-11)
+
+**Query:** Multi-agent orchestration frameworks for AI coding assistants (2026)
+
+**Results:**
+- 58 sources collected
+- 149 verified extractions → 129 after dedup → 120 after cleanup
+- 78 facts kept in 5 themes
+- Report rendered successfully
+
+**Saved for downstream work:**
+- `tests/fixtures/gold_queries/agentic_coding_2026.json` - full data (sources, hybrid_report)
+- `agentic_coding_report.html` - rendered report
+
+### Known Issues (Not Fixing - Would Be Over-Engineering)
+
+**Extraction quality:** Some garbage still slips through (~5%):
+- Marketing fluff: "Domo transforms the way..."
+- Markdown artifacts: `### Header` mixed into text
+- First-person opinions: "I find that..."
+- Vague claims with no metrics
+
+**Why not fixing:** Prompt already tells LLM to reject these. Adding regex filters is whack-a-mole (see "Already Tried"). Accept some noise.
+
+### Render Pipeline Fix (COMPLETED - 4 Issues Fixed)
+
+1. Wrong render function → now uses `render_report()` from render.py
+2. Citation regex → now checks if sentence CONTAINS `[N]` anywhere
+3. Footnotes layout → moved outside `.columns` div
+4. JSON artifacts → synthesis outputs plain prose only
+
+### Documentation Updates
+
+- Added to CLAUDE.md: pipeline bypass flags (`review_mode: 'none'`)
+- Added to CLAUDE.md: always ask about saving data before running reports
 
 ## Next Steps
 
-- (Future) Improve citation quality - ensure LLM cites more consistently
-- Test with a fresh query to verify full pipeline
+1. **Fix duplicate leak** - Add global dedup pass after batch dedup
+2. **Add source scoring** - Domain authority tier (official > papers > news > blogs)
+3. **Preserve query specificity** - Improve supervisor prompt to maintain nuance
+4. **Re-run targeted query** - Test "long context memory architectures" specifically
 
 ## Already Tried (Don't Repeat)
 
@@ -177,7 +245,9 @@ CHUNK_THRESHOLD = 100000  # Effectively disabled
 | Per-source dedup limit | Killed coverage | Threw away 95% of facts |
 | Jaccard dedup with thresholds | 55% FP rate | Can't understand semantics |
 | Jaccard + number protection | 0% FP, 54% recall | Still misses paraphrases |
+| JSON output from synthesis | Leaked artifacts | LLM outputs JSON structure in prose |
+| Regex cleanup of JSON | Fragile | Whack-a-mole, won't scale |
 
 ## Last Updated
 
-2026-01-11 — Simplified: removed high trust mode, replaced with `prefer_authoritative_sources` boolean. CSS fixes complete.
+2026-01-12 — Quality audit on orchestration query. Found 3 architectural gaps: batch dedup leak, soft-only source filtering, query specificity dilution. Next: fix dedup, add source scoring.

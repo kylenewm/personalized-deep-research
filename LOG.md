@@ -4,6 +4,169 @@
 
 ---
 
+## 2026-01-11 - Render Pipeline FIXED (Multiple Issues)
+
+### Summary
+
+Fixed 4 interconnected bugs in the render pipeline that were causing broken HTML output:
+
+1. **Wrong render function** - safeguarded_report.py used `render_hybrid_report()` instead of `render_report()`
+2. **Citation marking bug** - regex expected citations AFTER punctuation, but LLM writes them BEFORE
+3. **Footnotes layout broken** - was inside `.columns` grid div, got squeezed into one column
+4. **JSON artifacts in prose** - synthesis prompt asked for JSON output, LLM sometimes leaked it
+
+### Fix 1: Use Correct Render Function
+
+**File:** `src/open_deep_research/nodes/safeguarded_report.py`
+
+**Change:** Line 136 changed from:
+```python
+from open_deep_research.pipeline_v2 import render_hybrid_report
+final_report = render_hybrid_report(report, use_color=True)
+```
+To:
+```python
+from open_deep_research.render import render_report
+final_report = render_report(report)
+```
+
+**Result:** Now uses proper Jinja2 template with full CSS, citations, footnotes.
+
+### Fix 2: Citation Marking Regex
+
+**File:** `src/open_deep_research/render.py` (lines 208-226)
+
+**Problem:** Old regex `r'([^.!?]*[.!?])(\s*\[\d+\])?'` expected citations AFTER punctuation:
+- Expected: `"sentence. [1]"`
+- Actual: `"sentence [1]."` or `"sentence[1]."`
+
+So ALL sentences were marked `unverified`, and CSS added `[u]` to everything.
+
+**Fix:** Changed to check if sentence CONTAINS `[N]` anywhere:
+```python
+def mark_uncited_sentences(text):
+    parts = re.split(r'(?<=[.!?])\s+', text)
+    result = []
+    for part in parts:
+        if not part.strip():
+            continue
+        if re.search(r'\[\d+\]', part):  # Has citation anywhere
+            result.append(part)
+        else:
+            result.append(f'<span class="unverified">{part}</span>')
+    return ' '.join(result) if result else text
+```
+
+### Fix 3: Footnotes Layout
+
+**File:** `src/open_deep_research/render.py`
+
+**Problem:** `{footnotes_html}` was placed INSIDE `<div class="columns">` (2-column grid), so it got squeezed into one grid cell instead of spanning full width.
+
+**Fix:** Moved `{footnotes_html}` OUTSIDE the `.columns` div:
+```html
+</div>  <!-- close .columns -->
+
+{footnotes_html}  <!-- now full width -->
+
+</body>
+```
+
+Also simplified CSS - removed `calc(50% - 50vw)` hack that was causing centering issues:
+```css
+.footnotes-section {
+    margin-top: 3rem;
+    padding: 2rem 0;
+    background: var(--paper);
+    border-top: 1px solid var(--rule);
+    column-count: 3;
+    column-gap: 2rem;
+}
+```
+
+### Fix 4: Remove JSON from Synthesis
+
+**File:** `src/open_deep_research/pipeline_v2.py`
+
+**Problem:** Synthesis prompt asked for JSON output:
+```
+Output JSON:
+{
+  "prose": "Your synthesized paragraphs...",
+  "cited_ids": [1, 3, 5, ...]
+}
+```
+
+LLM sometimes leaked JSON structure into prose text, showing raw `"cited_ids": [1, 2, 3...]` in rendered report.
+
+**Fix:** Changed prompt to output plain prose only:
+```
+Output ONLY the prose paragraphs. No JSON, no metadata, no formatting - just the text with [N] citations inline.
+```
+
+And simplified parsing:
+```python
+# Before: regex JSON extraction with fallbacks
+# After:
+prose = response.strip()
+```
+
+### Lessons Learned
+
+1. **Don't ask LLM for JSON when you don't need it** - citation IDs can be extracted from prose via regex `\[\d+\]`
+2. **Test render with real data** - quick unit tests didn't catch the citation position bug
+3. **CSS layout debugging** - check parent containers when things are off-center
+4. **Read CLAUDE.md** - invariants remind us to keep things simple, not patch with regex
+
+### Files Changed
+
+| File | Changes |
+|------|---------|
+| `safeguarded_report.py` | Use `render_report()` from render.py |
+| `render.py` | Fix citation regex, fix footnotes layout/CSS |
+| `pipeline_v2.py` | Remove JSON from synthesis prompt, simplify parsing |
+
+---
+
+## 2026-01-11 - Render Pipeline BROKEN
+
+### Issue Discovered
+
+Ran full pipeline test with query about multi-agent orchestration frameworks (96 sources, 81 verified facts). Report generated but HTML output is broken:
+- No proper citations with [N] markers
+- No footnotes section
+- No two-column layout
+- CSS classes present but not styled correctly
+
+### Root Cause
+
+Two competing render functions:
+1. `render_hybrid_report()` in `pipeline_v2.py:1090` - basic HTML output, CURRENTLY USED
+2. `render_report()` in `render.py:573` - proper Jinja2 template-based render, NOT USED
+
+`safeguarded_report.py:136` imports and calls `render_hybrid_report()` from pipeline_v2, bypassing the proper render.py module entirely.
+
+### What Happened Today
+
+1. Shipped source quality guidance (per-domain limit, prefer_authoritative_sources flag)
+2. Cleaned up repo (removed 41 temp files, updated .gitignore)
+3. Ran pipeline test - extraction/dedup/arrangement all worked
+4. Tried to render HTML - discovered render is broken
+
+### Fix Needed
+
+Change `safeguarded_report.py:136` from:
+```python
+final_report = render_hybrid_report(report, use_color=True)
+```
+To:
+```python
+from open_deep_research.render import render_report
+final_report = render_report(report)
+```
+
+---
+
 ## 2026-01-07
 
 ### Setup: Planning-with-files memory system

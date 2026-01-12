@@ -809,11 +809,7 @@ STYLE:
 - Start with the most important findings
 - Use specific numbers and details from the facts
 
-Output JSON:
-{{
-  "prose": "Your synthesized paragraphs with [1], [2], etc. citations inline...",
-  "cited_ids": [1, 3, 5, ...]  // Numbers of facts you cited
-}}'''
+Output ONLY the prose paragraphs. No JSON, no metadata, no formatting - just the text with [N] citations inline.'''
 
 # Source quality guidance for synthesis - injected when prefer_authoritative_sources=True
 SYNTHESIS_QUALITY_GUIDANCE = """
@@ -878,18 +874,8 @@ async def synthesize_theme(
         base_delay=1.0
     )
 
-    # Parse response
-    prose = ""
-    cited_ids = []
-    try:
-        match = re.search(r'\{[\s\S]*\}', response)
-        if match:
-            data = json.loads(match.group())
-            prose = data.get("prose", "")
-            cited_ids = data.get("cited_ids", [])
-    except json.JSONDecodeError:
-        # Fallback: use raw response as prose
-        prose = response
+    # Response is plain prose with [N] citations - no JSON parsing needed
+    prose = response.strip()
 
     # Build facts list from fact_ids
     # Note: LLM sees facts as FACT 1, FACT 2... (1-indexed sequential)
@@ -1368,10 +1354,20 @@ async def run_pipeline_v2(
     if not verified:
         raise ValueError("No verified extractions - cannot generate report")
 
-    # Deduplication: LLM identifies semantic duplicates
+    # Deduplication: LLM identifies semantic duplicates (within-batch)
     progress("DEDUP", f"Deduplicating {len(verified)} facts (LLM semantic matching)...")
     deduped = await deduplicate_extractions_llm(verified, llm_call)
     progress("DEDUP", f"Deduplicated: {len(verified)} → {len(deduped)} facts ({len(verified) - len(deduped)} duplicates removed)")
+
+    # Cross-batch dedup: catch exact/near-exact duplicates that were in different LLM batches
+    # Uses text similarity with number protection (threshold 0.85 = high similarity required)
+    if len(deduped) > 50:  # Only needed if we had multiple batches
+        cross_batch_deduped = deduplicate_extractions(deduped, similarity_threshold=0.85)
+        removed = len(deduped) - len(cross_batch_deduped)
+        if removed > 0:
+            progress("DEDUP", f"Cross-batch pass: {len(deduped)} → {len(cross_batch_deduped)} facts ({removed} cross-batch duplicates)")
+        deduped = cross_batch_deduped
+
     verified = deduped
 
     if not verified:

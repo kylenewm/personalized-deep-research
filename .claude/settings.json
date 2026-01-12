@@ -28,6 +28,17 @@
         ]
       }
     ],
+    "Stop": [
+      {
+        "matcher": ".*",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "~/.council/scripts/rich-notify.sh"
+          }
+        ]
+      }
+    ],
     "Notification": [
       {
         "matcher": "",

@@ -50,6 +50,44 @@ Never rush. Never bullshit.
 
 ---
 
+## Running the Pipeline (IMPORTANT)
+
+### Bypass Review Mode
+
+The pipeline has a brief review mode that will INTERRUPT execution waiting for human input. **Always bypass it:**
+
+```python
+config = {
+    'configurable': {
+        'review_mode': 'none',       # Skip human review checkpoints
+        'allow_clarification': False, # No clarification questions
+    }
+}
+```
+
+Without this, the pipeline stops after brief generation with 0 sources.
+
+### Always Ask About Saving Data
+
+**Before running any report/pipeline**, ask the user:
+
+> "Do you want me to save the extractions and source data for downstream work (re-rendering, iteration)?"
+
+If yes, save to `tests/fixtures/gold_queries/{name}.json`:
+```python
+save_data = {
+    'query': query,
+    'research_brief': result.get('research_brief', ''),
+    'sources': result.get('source_store', []),
+    'hybrid_report': result.get('hybrid_report', {}),
+    'captured_at': datetime.now().isoformat(),
+}
+```
+
+This allows re-rendering without re-running the expensive research step.
+
+---
+
 ## Testing
 
 ```bash
@@ -90,6 +128,44 @@ Never rush. Never bullshit.
 
 ---
 
+## Subagents
+
+| Agent | Purpose | When to Use |
+|-------|---------|-------------|
+| `code-architect` | Design before implementing | New pipeline nodes, architectural changes |
+| `verify-app` | Test implementation works | After implementing, before declaring done |
+| `code-simplifier` | Reduce complexity | After feature complete, code feels bloated |
+| `build-validator` | Check deployment readiness | Before releases |
+| `oncall-guide` | Debug issues | When investigating pipeline failures |
+
+**How to invoke:** Ask Claude to "use code-architect to design this" or "spawn verify-app to test"
+
+---
+
+## Workflow (Boris-Style)
+
+For non-trivial tasks:
+
+```
+1. Think        → Plan mode or code-architect (design first)
+2. Implement    → Write the code
+3. Verify       → verify-app OR /test (prove it works)
+4. Simplify     → Optional: code-simplifier if complex
+5. Review       → /review (fresh subagent eyes)
+6. Ship         → /ship (test → commit → push → PR)
+```
+
+**This project's workflow emphasis:**
+- ALWAYS verify with tests before marking done (Quality Gates above)
+- ALWAYS check INVARIANTS.md before structural changes
+- Use /sandbox for pipeline testing without API costs
+
+**Shortcuts:**
+- Bug fix: implement → /test → /done → /commit
+- Pipeline change: code-architect → implement → /test → verify-app → /ship
+
+---
+
 ## Files
 
 | File | Purpose |
@@ -113,3 +189,25 @@ Update it when: adding modules, changing data flow, modifying graph/state.
 ## Context Preservation
 
 Long conversation → run `/save`
+
+---
+
+## Post-Task Reflection
+
+**After completing a task, before running /ship, reflect in REFLECTIONS.md:**
+
+Ask yourself:
+- What was harder than expected?
+- What context was missing or unclear?
+- What tools/commands didn't work well?
+- What would have made this easier?
+
+**Append to REFLECTIONS.md** with format:
+```markdown
+## [Date] [Task Summary]
+**What worked:**
+**What was hard:**
+**What would help next time:**
+```
+
+This captures friction without interrupting flow. Do it once at the end, not during work.

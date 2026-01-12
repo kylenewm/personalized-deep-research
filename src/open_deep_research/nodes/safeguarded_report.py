@@ -23,11 +23,11 @@ from open_deep_research.configuration import Configuration
 from open_deep_research.state import AgentState
 from open_deep_research.pipeline_v2 import (
     run_pipeline_v2,
-    render_hybrid_report,
     HybridReport,
     BATCH_SIZE,
     DEFAULT_MIN_SCORE,
 )
+from open_deep_research.render import render_report
 from open_deep_research.render import report_to_dict
 
 
@@ -131,9 +131,9 @@ async def safeguarded_report_generation(state: AgentState, config: RunnableConfi
             on_progress=on_progress
         )
 
-        # Render as markdown
+        # Render as HTML using proper template
         print(f"[SAFEGUARDED:RENDER] Rendering report...")
-        final_report = render_hybrid_report(report, use_color=True)
+        final_report = render_report(report)
 
         print(f"[SAFEGUARDED] ✓ Complete: {report.verified_count} facts, {len(report.sections)} themes, {len(final_report)} chars")
 
