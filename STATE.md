@@ -391,14 +391,32 @@ Two-stage evaluation to measure pipeline quality:
 **Remaining:**
 - Uncited rate 7.7% vs 5% target - minor, synthesis could improve citation coverage
 
+## Showcase Run (2026-01-12)
+
+Added example output to README from `agentic_coding_2026.json` gold dataset:
+- 73 verified facts across 5 themes
+- Brief eval: 5/5/5 (preservation, dilution, assumptions)
+- Upstream: PASS (4.33 quality, 0% duplicates)
+- Downstream: WARN (6.4% uncited vs 5% target)
+
+## Debugging Run: claude_code_orch_2026_low_verify.json
+
+Ran Claude Code orchestration query but got poor verification:
+- 43 facts, avg match_score **0.63** (target ≥0.8)
+- 37 of 43 facts had match_score < 0.8
+- Uncited rate 33.8% (FAIL)
+
+**Root cause:** Extraction quality issue - facts not well-verified against source text. Saved for debugging extraction/verification logic.
+
 ## Next Steps
 
 1. ~~**Fix duplicate leak**~~ ✅ DONE - Cross-batch dedup added
 2. ~~**Build eval framework**~~ ✅ DONE - upstream + downstream + brief evals
 3. ~~**Preserve query specificity**~~ ✅ NOT NEEDED - brief eval shows 5/5 preservation
-4. **Add source scoring** - Domain authority tier (official > papers > news > blogs)
-5. **Apply overnight agent findings** - Implement compaction, maxTurns, structured memory
-6. **Run full eval** - Test on larger dataset before declaring pipeline stable
+4. ~~**Add showcase to README**~~ ✅ DONE - agentic_coding_2026 example
+5. **Debug low match_score issue** - Why claude_code_orch run had 0.63 avg match_score
+6. **Add source scoring** - Domain authority tier (official > papers > news > blogs)
+7. **Apply overnight agent findings** - Implement compaction, maxTurns, structured memory
 
 ## Already Tried (Don't Repeat)
 
@@ -415,4 +433,4 @@ Two-stage evaluation to measure pipeline quality:
 
 ## Last Updated
 
-2026-01-12 — Eval framework complete and tuned. All metrics PASS except minor uncited rate warning (7.7% vs 5%). Fixed: duplicate rate now 0% (clarified prompt), uncited rate improved from 17.5% to 7.7% (cleaned gold dataset).
+2026-01-12 — Added showcase to README. Discovered extraction verification issue in claude_code_orch run (0.63 avg match_score). Saved debugging dataset.
