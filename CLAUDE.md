@@ -189,25 +189,3 @@ Update it when: adding modules, changing data flow, modifying graph/state.
 ## Context Preservation
 
 Long conversation → run `/save`
-
----
-
-## Post-Task Reflection
-
-**After completing a task, before running /ship, reflect in REFLECTIONS.md:**
-
-Ask yourself:
-- What was harder than expected?
-- What context was missing or unclear?
-- What tools/commands didn't work well?
-- What would have made this easier?
-
-**Append to REFLECTIONS.md** with format:
-```markdown
-## [Date] [Task Summary]
-**What worked:**
-**What was hard:**
-**What would help next time:**
-```
-
-This captures friction without interrupting flow. Do it once at the end, not during work.

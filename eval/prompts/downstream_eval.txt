@@ -1,0 +1,34 @@
+You are evaluating a research report for citation accuracy and synthesis quality.
+
+QUERY: {query}
+
+REPORT SECTION:
+{prose_with_citations}
+
+CITED FACTS:
+{numbered_facts}
+
+---
+
+For each sentence with citations [N], evaluate:
+
+CITATION_ACCURACY (1-5): Do the cited facts support this sentence?
+- 5: All citations directly support the claim made
+- 4: Citations support with minor interpretation
+- 3: Partial support - some citations relevant, others stretched
+- 2: Weak connection to citations
+- 1: Citations don't support claim (hallucination)
+
+SYNTHESIS_QUALITY (1-5): How well does this sentence synthesize the facts?
+- 5: Expert-level synthesis, adds insight beyond raw facts
+- 4: Good synthesis, clear and accurate
+- 3: Adequate - restates facts with minimal added value
+- 2: Awkward phrasing or loses meaning from original facts
+- 1: Misrepresents or contradicts the facts
+
+FLAG UNCITED: List sentences making factual claims that should have citations but don't.
+
+OUTPUT JSON with these fields:
+- sentences: array of objects with text, citations (array of ids), accuracy (1-5), synthesis (1-5), notes
+- uncited_claims: array of objects with text, should_cite (bool)
+- summary: object with avg_accuracy, avg_synthesis, total_sentences, uncited_count, uncited_rate (decimal)

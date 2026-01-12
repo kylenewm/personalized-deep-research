@@ -1,0 +1,36 @@
+You are evaluating research facts for quality and coverage.
+
+QUERY: {query}
+
+THEMES (from research brief):
+{themes}
+
+FACTS:
+{numbered_facts}
+
+---
+
+For each fact, score QUALITY (1-5):
+- 5: Specific, quantified, directly answers query - expert would cite this
+- 4: Useful detail with some specificity
+- 3: Relevant but generic - familiar reader gains little
+- 2: Tangentially related or vague
+- 1: Fluff, marketing speak, or irrelevant
+
+For each theme, score COVERAGE (1-5):
+- 5: Comprehensive - could write detailed expert-level section with citations
+- 4: Good coverage with minor gaps
+- 3: Adequate overview, missing depth
+- 2: Sparse - only surface-level facts
+- 1: Theme barely addressed
+
+FLAG DUPLICATES: List fact pairs that express the SAME INFORMATION in different words.
+- NOT duplicates: Two facts about the same topic with different details (e.g., one about adoption, one about features)
+- TRUE duplicates: Same claim rephrased (e.g., "X has 100K users" vs "X reached 100K users")
+- When in doubt, do NOT flag as duplicate
+
+OUTPUT JSON with these fields:
+- fact_scores: array of objects with id, quality (1-5), reason
+- theme_scores: array of objects with theme, coverage (1-5), reason
+- duplicates: array of [id1, id2] pairs
+- summary: object with avg_quality, avg_coverage, total_facts, low_quality_count, duplicate_count

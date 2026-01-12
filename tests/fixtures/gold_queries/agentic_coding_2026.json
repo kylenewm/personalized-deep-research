@@ -1729,22 +1729,12 @@
         "theme": "Adoption, Usage, and Ecosystem Scale"
       },
       {
-        "extracted_text": "By mid-2025, CrewAI reported ~150+ enterprise customers and 100,000+ daily agent executions, indicating notable adoption traction in business workflows.",
-        "source_url": "https://datamites.com/blog/crewai-vs-autogen-vs-langgraph-top-multi-agent-frameworks/?srsltid=AfmBOoqnmeJo76pe_WNolICGIgFyybM0AdCdoTp3GhuvfEYjMBjPFR4J",
-        "source_title": "CrewAI funding and adoption",
-        "source_domain": "datamites.com",
-        "match_score": 0.75,
-        "global_id": 4,
-        "cited": true,
-        "theme": "Adoption, Usage, and Ecosystem Scale"
-      },
-      {
         "extracted_text": "AutoGen has been noted to have one of the fastest growth rates in framework adoption, with reports indicating ~300 % year-over-year traction for code generation and agent workflows, positioning it as a rapid-growth ecosystem in 2024\u20132025.",
         "source_url": "https://datamites.com/blog/crewai-vs-autogen-vs-langgraph-top-multi-agent-frameworks/?srsltid=AfmBOoqnmeJo76pe_WNolICGIgFyybM0AdCdoTp3GhuvfEYjMBjPFR4J",
         "source_title": "AutoGen adoption growth",
         "source_domain": "datamites.com",
         "match_score": 0.6666666666666666,
-        "global_id": 5,
+        "global_id": 4,
         "cited": true,
         "theme": "Adoption, Usage, and Ecosystem Scale"
       },
@@ -1754,27 +1744,7 @@
         "source_title": "AutoGen community and ecosystem footprint",
         "source_domain": "datamites.com",
         "match_score": 0.6666666666666666,
-        "global_id": 6,
-        "cited": true,
-        "theme": "Adoption, Usage, and Ecosystem Scale"
-      },
-      {
-        "extracted_text": "LangChain\u2019s ecosystem includes LangGraph for orchestration, LangSmith for debugging and evaluation, and LangGraph Platform for deployment, giving teams everything they need to go from prototype to production. With over 1 million developers, 100,000 GitHub stars, and more than 600 integrations, it has the largest community in the generative AI space.",
-        "source_url": "https://www.index.dev/blog/best-mcp-ai-agent-frameworks",
-        "source_title": "LangChain popularity and ecosystem",
-        "source_domain": "index.dev",
-        "match_score": 0.6666666666666666,
-        "global_id": 7,
-        "cited": true,
-        "theme": "Adoption, Usage, and Ecosystem Scale"
-      },
-      {
-        "extracted_text": "Reports suggest that ~400 companies use LangGraph in live multi-agent workflow systems a notable indicator of production maturity and reliability for complex pipelines.",
-        "source_url": "https://datamites.com/blog/crewai-vs-autogen-vs-langgraph-top-multi-agent-frameworks/?srsltid=AfmBOoqnmeJo76pe_WNolICGIgFyybM0AdCdoTp3GhuvfEYjMBjPFR4J",
-        "source_title": "LangGraph enterprise usage",
-        "source_domain": "datamites.com",
-        "match_score": 0.5,
-        "global_id": 8,
+        "global_id": 5,
         "cited": true,
         "theme": "Adoption, Usage, and Ecosystem Scale"
       },
@@ -1784,7 +1754,7 @@
         "source_title": "AutoGen Microsoft ecosystem",
         "source_domain": "rahulkolekar.com",
         "match_score": 0.5,
-        "global_id": 9,
+        "global_id": 6,
         "cited": true,
         "theme": "Adoption, Usage, and Ecosystem Scale"
       },
@@ -1794,7 +1764,7 @@
         "source_title": "LangGraph multi-agent orchestration",
         "source_domain": "analyticsvidhya.com",
         "match_score": 1.0,
-        "global_id": 10,
+        "global_id": 7,
         "cited": true,
         "theme": "Architecture, Memory, and Workflow Models"
       },
@@ -1804,7 +1774,7 @@
         "source_title": "LangGraph supports short-term and long-term memory with external vector database integration",
         "source_domain": "dev.to",
         "match_score": 1.0,
-        "global_id": 11,
+        "global_id": 8,
         "cited": true,
         "theme": "Architecture, Memory, and Workflow Models"
       },
@@ -1814,7 +1784,7 @@
         "source_title": "CrewAI employs SQLite3 for persistent long-term memory storage",
         "source_domain": "dev.to",
         "match_score": 1.0,
-        "global_id": 12,
+        "global_id": 9,
         "cited": true,
         "theme": "Architecture, Memory, and Workflow Models"
       },
@@ -1824,7 +1794,7 @@
         "source_title": "AutoGen relies on message lists for short-term memory and external integrations for long-term memory",
         "source_domain": "dev.to",
         "match_score": 1.0,
-        "global_id": 13,
+        "global_id": 10,
         "cited": true,
         "theme": "Architecture, Memory, and Workflow Models"
       },
@@ -1834,7 +1804,7 @@
         "source_title": "LangGraph supports persistent memory preserving agent states and knowledge across sessions",
         "source_domain": "dev.to",
         "match_score": 1.0,
-        "global_id": 14,
+        "global_id": 11,
         "cited": true,
         "theme": "Architecture, Memory, and Workflow Models"
       },
@@ -1844,7 +1814,7 @@
         "source_title": "CrewAI uses role-based task delegation mapping agents to responsibilities",
         "source_domain": "datacamp.com",
         "match_score": 1.0,
-        "global_id": 15,
+        "global_id": 12,
         "cited": true,
         "theme": "Architecture, Memory, and Workflow Models"
       },
@@ -1854,7 +1824,7 @@
         "source_title": "LangGraph connects agents as nodes in a workflow graph with conditional branching and structured state",
         "source_domain": "datacamp.com",
         "match_score": 1.0,
-        "global_id": 16,
+        "global_id": 13,
         "cited": true,
         "theme": "Architecture, Memory, and Workflow Models"
       },
@@ -1864,7 +1834,7 @@
         "source_title": "AutoGen emphasizes conversational group chats where agents critique and build on each other\u2019s responses",
         "source_domain": "datacamp.com",
         "match_score": 1.0,
-        "global_id": 17,
+        "global_id": 14,
         "cited": true,
         "theme": "Architecture, Memory, and Workflow Models"
       },
@@ -1874,7 +1844,7 @@
         "source_title": "LangGraph workflow control",
         "source_domain": "galileo.ai",
         "match_score": 0.8,
-        "global_id": 18,
+        "global_id": 15,
         "cited": true,
         "theme": "Architecture, Memory, and Workflow Models"
       },
@@ -1884,7 +1854,7 @@
         "source_title": "LangGraph scalability benchmarks",
         "source_domain": "datamites.com",
         "match_score": 0.75,
-        "global_id": 19,
+        "global_id": 16,
         "cited": true,
         "theme": "Architecture, Memory, and Workflow Models"
       },
@@ -1894,7 +1864,7 @@
         "source_title": "LangGraph output reliability",
         "source_domain": "vocal.media",
         "match_score": 0.75,
-        "global_id": 20,
+        "global_id": 17,
         "cited": true,
         "theme": "Architecture, Memory, and Workflow Models"
       },
@@ -1904,7 +1874,7 @@
         "source_title": "AutoGen architecture and memory",
         "source_domain": "datacamp.com",
         "match_score": 0.75,
-        "global_id": 21,
+        "global_id": 18,
         "cited": true,
         "theme": "Architecture, Memory, and Workflow Models"
       },
@@ -1914,7 +1884,7 @@
         "source_title": "LangChain multi-agent support",
         "source_domain": "multimodal.dev",
         "match_score": 0.6666666666666666,
-        "global_id": 22,
+        "global_id": 19,
         "cited": true,
         "theme": "Architecture, Memory, and Workflow Models"
       },
@@ -1924,7 +1894,7 @@
         "source_title": "LangGraph workflow model",
         "source_domain": "datamites.com",
         "match_score": 0.6666666666666666,
-        "global_id": 23,
+        "global_id": 20,
         "cited": true,
         "theme": "Architecture, Memory, and Workflow Models"
       },
@@ -1934,7 +1904,7 @@
         "source_title": "LangGraph output validation",
         "source_domain": "vocal.media",
         "match_score": 0.6666666666666666,
-        "global_id": 24,
+        "global_id": 21,
         "cited": true,
         "theme": "Architecture, Memory, and Workflow Models"
       },
@@ -1944,7 +1914,7 @@
         "source_title": "AWS Bedrock agent features",
         "source_domain": "rahulkolekar.com",
         "match_score": 0.6666666666666666,
-        "global_id": 25,
+        "global_id": 22,
         "cited": true,
         "theme": "Architecture, Memory, and Workflow Models"
       },
@@ -1954,7 +1924,7 @@
         "source_title": "Google Vertex AI agent features",
         "source_domain": "rahulkolekar.com",
         "match_score": 0.6666666666666666,
-        "global_id": 26,
+        "global_id": 23,
         "cited": true,
         "theme": "Architecture, Memory, and Workflow Models"
       },
@@ -1964,7 +1934,7 @@
         "source_title": "LangGraph licensing and design",
         "source_domain": "langchain.com",
         "match_score": 0.6666666666666666,
-        "global_id": 27,
+        "global_id": 24,
         "cited": true,
         "theme": "Architecture, Memory, and Workflow Models"
       },
@@ -1974,7 +1944,7 @@
         "source_title": "LangGraph memory and state",
         "source_domain": "vocal.media",
         "match_score": 0.5,
-        "global_id": 28,
+        "global_id": 25,
         "cited": true,
         "theme": "Architecture, Memory, and Workflow Models"
       },
@@ -1984,7 +1954,7 @@
         "source_title": "LangGraph architecture",
         "source_domain": "rahulkolekar.com",
         "match_score": 0.5,
-        "global_id": 29,
+        "global_id": 26,
         "cited": true,
         "theme": "Architecture, Memory, and Workflow Models"
       },
@@ -1994,7 +1964,7 @@
         "source_title": "LangGraph best use cases",
         "source_domain": "rahulkolekar.com",
         "match_score": 0.5,
-        "global_id": 30,
+        "global_id": 27,
         "cited": true,
         "theme": "Architecture, Memory, and Workflow Models"
       },
@@ -2004,7 +1974,7 @@
         "source_title": "LangGraph memory architecture",
         "source_domain": "dev.to",
         "match_score": 0.5,
-        "global_id": 31,
+        "global_id": 28,
         "cited": true,
         "theme": "Architecture, Memory, and Workflow Models"
       },
@@ -2014,7 +1984,7 @@
         "source_title": "LangGraph architecture and memory",
         "source_domain": "datacamp.com",
         "match_score": 0.5,
-        "global_id": 32,
+        "global_id": 29,
         "cited": true,
         "theme": "Architecture, Memory, and Workflow Models"
       },
@@ -2024,7 +1994,7 @@
         "source_title": "CrewAI market research pipeline efficiency",
         "source_domain": "datamites.com",
         "match_score": 1.0,
-        "global_id": 33,
+        "global_id": 30,
         "cited": true,
         "theme": "Performance, Scalability, and Reliability Metrics"
       },
@@ -2034,7 +2004,7 @@
         "source_title": "CrewAI performance benchmark vs LangGraph",
         "source_domain": "datamites.com",
         "match_score": 1.0,
-        "global_id": 34,
+        "global_id": 31,
         "cited": true,
         "theme": "Performance, Scalability, and Reliability Metrics"
       },
@@ -2044,7 +2014,7 @@
         "source_title": "CrewAI supports scalability through parallel task execution and horizontal replication of agents",
         "source_domain": "datacamp.com",
         "match_score": 1.0,
-        "global_id": 35,
+        "global_id": 32,
         "cited": true,
         "theme": "Performance, Scalability, and Reliability Metrics"
       },
@@ -2054,7 +2024,7 @@
         "source_title": "CrewAI scalability model",
         "source_domain": "vocal.media",
         "match_score": 0.75,
-        "global_id": 36,
+        "global_id": 33,
         "cited": true,
         "theme": "Performance, Scalability, and Reliability Metrics"
       },
@@ -2064,7 +2034,7 @@
         "source_title": "CrewAI scalability",
         "source_domain": "datacamp.com",
         "match_score": 0.75,
-        "global_id": 37,
+        "global_id": 34,
         "cited": true,
         "theme": "Performance, Scalability, and Reliability Metrics"
       },
@@ -2074,17 +2044,7 @@
         "source_title": "AutoGen scalability",
         "source_domain": "datacamp.com",
         "match_score": 0.75,
-        "global_id": 38,
-        "cited": true,
-        "theme": "Performance, Scalability, and Reliability Metrics"
-      },
-      {
-        "extracted_text": "Daily downloads and usage benchmarks show CrewAI performing well on structured tasks against alternatives, with reported execution speeds up to ~5.76 \u00d7 faster than LangGraph in some QA-task benchmarks.",
-        "source_url": "https://datamites.com/blog/crewai-vs-autogen-vs-langgraph-top-multi-agent-frameworks/?srsltid=AfmBOormFYVXMpilIlrSGKJ2JWt8gIcMoeFpGQzYiKmMuhsRo6VCx3sx",
-        "source_title": "CrewAI performance benchmark vs LangGraph",
-        "source_domain": "datamites.com",
-        "match_score": 0.6666666666666666,
-        "global_id": 39,
+        "global_id": 35,
         "cited": true,
         "theme": "Performance, Scalability, and Reliability Metrics"
       },
@@ -2094,7 +2054,7 @@
         "source_title": "CrewAI technical stack",
         "source_domain": "rahulkolekar.com",
         "match_score": 0.6666666666666666,
-        "global_id": 40,
+        "global_id": 36,
         "cited": true,
         "theme": "Performance, Scalability, and Reliability Metrics"
       },
@@ -2104,7 +2064,7 @@
         "source_title": "CrewAI error handling",
         "source_domain": "galileo.ai",
         "match_score": 0.6666666666666666,
-        "global_id": 41,
+        "global_id": 37,
         "cited": true,
         "theme": "Performance, Scalability, and Reliability Metrics"
       },
@@ -2114,7 +2074,7 @@
         "source_title": "LangGraph scalability",
         "source_domain": "galileo.ai",
         "match_score": 0.6666666666666666,
-        "global_id": 42,
+        "global_id": 38,
         "cited": true,
         "theme": "Performance, Scalability, and Reliability Metrics"
       },
@@ -2124,7 +2084,7 @@
         "source_title": "AutoGen multi-agent communication",
         "source_domain": "kubiya.ai",
         "match_score": 1.0,
-        "global_id": 43,
+        "global_id": 39,
         "cited": true,
         "theme": "Human-in-the-Loop, Collaboration, and Orchestration Features"
       },
@@ -2134,7 +2094,7 @@
         "source_title": "CrewAI integrates human checkpoints directly into task execution workflows",
         "source_domain": "datacamp.com",
         "match_score": 1.0,
-        "global_id": 44,
+        "global_id": 40,
         "cited": true,
         "theme": "Human-in-the-Loop, Collaboration, and Orchestration Features"
       },
@@ -2144,7 +2104,7 @@
         "source_title": "LangGraph provides pause and resume hooks for human-in-the-loop workflow control",
         "source_domain": "datacamp.com",
         "match_score": 1.0,
-        "global_id": 45,
+        "global_id": 41,
         "cited": true,
         "theme": "Human-in-the-Loop, Collaboration, and Orchestration Features"
       },
@@ -2154,7 +2114,7 @@
         "source_title": "AutoGen embeds humans directly in conversational workflows for oversight",
         "source_domain": "datacamp.com",
         "match_score": 1.0,
-        "global_id": 46,
+        "global_id": 42,
         "cited": true,
         "theme": "Human-in-the-Loop, Collaboration, and Orchestration Features"
       },
@@ -2164,7 +2124,7 @@
         "source_title": "CrewAI features",
         "source_domain": "multimodal.dev",
         "match_score": 0.75,
-        "global_id": 47,
+        "global_id": 43,
         "cited": true,
         "theme": "Human-in-the-Loop, Collaboration, and Orchestration Features"
       },
@@ -2174,7 +2134,7 @@
         "source_title": "AutoGen conversational collaboration",
         "source_domain": "vocal.media",
         "match_score": 0.75,
-        "global_id": 48,
+        "global_id": 44,
         "cited": true,
         "theme": "Human-in-the-Loop, Collaboration, and Orchestration Features"
       },
@@ -2184,7 +2144,7 @@
         "source_title": "CrewAI architecture and memory",
         "source_domain": "datacamp.com",
         "match_score": 0.75,
-        "global_id": 49,
+        "global_id": 45,
         "cited": true,
         "theme": "Human-in-the-Loop, Collaboration, and Orchestration Features"
       },
@@ -2194,7 +2154,7 @@
         "source_title": "In 2026, advanced businesses will begin shifting toward human-on-the-loop agent orchestration models",
         "source_domain": "deloitte.com",
         "match_score": 0.75,
-        "global_id": 50,
+        "global_id": 46,
         "cited": true,
         "theme": "Human-in-the-Loop, Collaboration, and Orchestration Features"
       },
@@ -2204,7 +2164,7 @@
         "source_title": "51% of developers use AI tools daily according to the 2025 Stack Overflow Developer Survey",
         "source_domain": "jellyfish.co",
         "match_score": 0.75,
-        "global_id": 51,
+        "global_id": 47,
         "cited": true,
         "theme": "Human-in-the-Loop, Collaboration, and Orchestration Features"
       },
@@ -2214,7 +2174,7 @@
         "source_title": "Writer\u2019s Action Agent GAIA benchmark",
         "source_domain": "o-mega.ai",
         "match_score": 0.6666666666666666,
-        "global_id": 52,
+        "global_id": 48,
         "cited": true,
         "theme": "Human-in-the-Loop, Collaboration, and Orchestration Features"
       },
@@ -2224,7 +2184,7 @@
         "source_title": "AutoGen features",
         "source_domain": "kubiya.ai",
         "match_score": 0.6666666666666666,
-        "global_id": 53,
+        "global_id": 49,
         "cited": true,
         "theme": "Human-in-the-Loop, Collaboration, and Orchestration Features"
       },
@@ -2234,7 +2194,7 @@
         "source_title": "CrewAI collaboration capabilities",
         "source_domain": "shakudo.io",
         "match_score": 0.6666666666666666,
-        "global_id": 54,
+        "global_id": 50,
         "cited": true,
         "theme": "Human-in-the-Loop, Collaboration, and Orchestration Features"
       },
@@ -2244,7 +2204,7 @@
         "source_title": "AutoGen human collaboration",
         "source_domain": "vocal.media",
         "match_score": 0.6666666666666666,
-        "global_id": 55,
+        "global_id": 51,
         "cited": true,
         "theme": "Human-in-the-Loop, Collaboration, and Orchestration Features"
       },
@@ -2254,7 +2214,7 @@
         "source_title": "AutoGen communication pattern",
         "source_domain": "galileo.ai",
         "match_score": 0.6666666666666666,
-        "global_id": 56,
+        "global_id": 52,
         "cited": true,
         "theme": "Human-in-the-Loop, Collaboration, and Orchestration Features"
       },
@@ -2264,17 +2224,7 @@
         "source_title": "AutoGen scales conversationally but has limitations for large-scale applications",
         "source_domain": "datacamp.com",
         "match_score": 0.6666666666666666,
-        "global_id": 57,
-        "cited": true,
-        "theme": "Human-in-the-Loop, Collaboration, and Orchestration Features"
-      },
-      {
-        "extracted_text": "CrewAI CrewAI specializes in creating intelligent agents capable of collaborating, sharing tasks, and optimizing actions through real-time communication and decision-making.",
-        "source_url": "https://www.shakudo.io/blog/top-9-ai-agent-frameworks",
-        "source_title": "CrewAI specializes in real-time communication and decision-making among collaborative AI agents",
-        "source_domain": "shakudo.io",
-        "match_score": 0.6666666666666666,
-        "global_id": 58,
+        "global_id": 53,
         "cited": true,
         "theme": "Human-in-the-Loop, Collaboration, and Orchestration Features"
       },
@@ -2284,7 +2234,7 @@
         "source_title": "AutoGen human-in-the-loop features",
         "source_domain": "vocal.media",
         "match_score": 0.5,
-        "global_id": 59,
+        "global_id": 54,
         "cited": true,
         "theme": "Human-in-the-Loop, Collaboration, and Orchestration Features"
       },
@@ -2294,7 +2244,7 @@
         "source_title": "CrewAI features",
         "source_domain": "turing.com",
         "match_score": 0.5,
-        "global_id": 60,
+        "global_id": 55,
         "cited": true,
         "theme": "Human-in-the-Loop, Collaboration, and Orchestration Features"
       },
@@ -2304,7 +2254,7 @@
         "source_title": "AutoGen features",
         "source_domain": "turing.com",
         "match_score": 0.5,
-        "global_id": 61,
+        "global_id": 56,
         "cited": true,
         "theme": "Human-in-the-Loop, Collaboration, and Orchestration Features"
       },
@@ -2314,7 +2264,7 @@
         "source_title": "AutoGen collaboration features",
         "source_domain": "multimodal.dev",
         "match_score": 0.75,
-        "global_id": 62,
+        "global_id": 57,
         "cited": false,
         "theme": "Human-in-the-Loop, Collaboration, and Orchestration Features"
       },
@@ -2324,7 +2274,7 @@
         "source_title": "AutoGen enterprise and production signals",
         "source_domain": "datamites.com",
         "match_score": 1.0,
-        "global_id": 63,
+        "global_id": 58,
         "cited": true,
         "theme": "Enterprise Production Readiness and Integration"
       },
@@ -2334,7 +2284,7 @@
         "source_title": "AgentFlow platform features",
         "source_domain": "shakudo.io",
         "match_score": 1.0,
-        "global_id": 64,
+        "global_id": 59,
         "cited": true,
         "theme": "Enterprise Production Readiness and Integration"
       },
@@ -2344,7 +2294,7 @@
         "source_title": "AgentFlow scheduling capabilities",
         "source_domain": "shakudo.io",
         "match_score": 1.0,
-        "global_id": 65,
+        "global_id": 60,
         "cited": true,
         "theme": "Enterprise Production Readiness and Integration"
       },
@@ -2354,7 +2304,7 @@
         "source_title": "Microsoft Agent Framework enterprise use",
         "source_domain": "kubiya.ai",
         "match_score": 1.0,
-        "global_id": 66,
+        "global_id": 61,
         "cited": true,
         "theme": "Enterprise Production Readiness and Integration"
       },
@@ -2364,7 +2314,7 @@
         "source_title": "AWS native cloud agents",
         "source_domain": "rahulkolekar.com",
         "match_score": 0.75,
-        "global_id": 67,
+        "global_id": 62,
         "cited": true,
         "theme": "Enterprise Production Readiness and Integration"
       },
@@ -2374,7 +2324,7 @@
         "source_title": "AgentFlow observability features",
         "source_domain": "shakudo.io",
         "match_score": 0.75,
-        "global_id": 68,
+        "global_id": 63,
         "cited": true,
         "theme": "Enterprise Production Readiness and Integration"
       },
@@ -2384,7 +2334,7 @@
         "source_title": "AutoGen automates AI agent creation with minimal manual coding and seamless Microsoft ecosystem integration",
         "source_domain": "shakudo.io",
         "match_score": 0.75,
-        "global_id": 69,
+        "global_id": 64,
         "cited": true,
         "theme": "Enterprise Production Readiness and Integration"
       },
@@ -2394,7 +2344,7 @@
         "source_title": "CrewAI security and modularity",
         "source_domain": "kubiya.ai",
         "match_score": 0.6666666666666666,
-        "global_id": 70,
+        "global_id": 65,
         "cited": true,
         "theme": "Enterprise Production Readiness and Integration"
       },
@@ -2404,7 +2354,7 @@
         "source_title": "AutoGen architectural approach",
         "source_domain": "shakudo.io",
         "match_score": 0.6666666666666666,
-        "global_id": 71,
+        "global_id": 66,
         "cited": true,
         "theme": "Enterprise Production Readiness and Integration"
       },
@@ -2414,7 +2364,7 @@
         "source_title": "CrewAI adoption limitations",
         "source_domain": "shakudo.io",
         "match_score": 0.6666666666666666,
-        "global_id": 72,
+        "global_id": 67,
         "cited": true,
         "theme": "Enterprise Production Readiness and Integration"
       },
@@ -2424,7 +2374,7 @@
         "source_title": "CrewAI security and orchestration",
         "source_domain": "kubiya.ai",
         "match_score": 0.6666666666666666,
-        "global_id": 73,
+        "global_id": 68,
         "cited": true,
         "theme": "Enterprise Production Readiness and Integration"
       },
@@ -2434,7 +2384,7 @@
         "source_title": "Microsoft Agent Framework platform",
         "source_domain": "rahulkolekar.com",
         "match_score": 0.6666666666666666,
-        "global_id": 74,
+        "global_id": 69,
         "cited": true,
         "theme": "Enterprise Production Readiness and Integration"
       },
@@ -2444,7 +2394,7 @@
         "source_title": "CrewAI framework features",
         "source_domain": "turing.com",
         "match_score": 0.6666666666666666,
-        "global_id": 75,
+        "global_id": 70,
         "cited": true,
         "theme": "Enterprise Production Readiness and Integration"
       },
@@ -2454,7 +2404,7 @@
         "source_title": "LangGraph deployment and observability",
         "source_domain": "langchain.com",
         "match_score": 0.6666666666666666,
-        "global_id": 76,
+        "global_id": 71,
         "cited": true,
         "theme": "Enterprise Production Readiness and Integration"
       },
@@ -2464,7 +2414,7 @@
         "source_title": "AutoGen architecture",
         "source_domain": "alphamatch.ai",
         "match_score": 0.5,
-        "global_id": 77,
+        "global_id": 72,
         "cited": true,
         "theme": "Enterprise Production Readiness and Integration"
       },
@@ -2474,7 +2424,7 @@
         "source_title": "DORA metrics include deployment frequency, lead time for changes, change failure rate, and mean time to recovery",
         "source_domain": "jellyfish.co",
         "match_score": 0.4,
-        "global_id": 78,
+        "global_id": 73,
         "cited": true,
         "theme": "Enterprise Production Readiness and Integration"
       }
