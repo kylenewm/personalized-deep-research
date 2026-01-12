@@ -107,13 +107,19 @@ async def safeguarded_report_generation(state: AgentState, config: RunnableConfi
 
     async def llm_call(prompt: str) -> str:
         """Call LLM for pipeline stages."""
-        resp = await client.chat.completions.create(
-            model="gpt-4.1-mini",  # Use fast model for extraction
-            messages=[{"role": "user", "content": prompt}],
-            max_tokens=4000,
-            temperature=0.3
-        )
-        return resp.choices[0].message.content
+        try:
+            resp = await client.chat.completions.create(
+                model="gpt-4.1-mini",  # Use fast model for extraction
+                messages=[{"role": "user", "content": prompt}],
+                max_tokens=4000,
+                temperature=0.3
+            )
+            if not resp.choices:
+                raise ValueError("LLM returned empty response")
+            return resp.choices[0].message.content or ""
+        except Exception as e:
+            logging.error(f"[SAFEGUARDED] LLM call failed: {e}")
+            raise
 
     # Progress callback
     def on_progress(stage: str, msg: str):

@@ -158,6 +158,15 @@ async def claim_pre_check(state: AgentState, config: RunnableConfig) -> dict:
         prompt = CLAIM_EXTRACTION_PROMPT.format(notes=findings[:20000])
 
         result = await extraction_llm.ainvoke([HumanMessage(content=prompt)])
+
+        # Validate structured output
+        if result is None or not hasattr(result, 'claims'):
+            print("[LAYER3] LLM returned invalid structured output")
+            return {}
+        if not isinstance(result.claims, list):
+            print(f"[LAYER3] Expected claims list, got {type(result.claims)}")
+            return {}
+
         claims = result.claims[:20]  # Limit to 20 claims
 
         print(f"[LAYER3] Extracted {len(claims)} claims")

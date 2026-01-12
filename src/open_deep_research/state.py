@@ -144,6 +144,9 @@ def override_reducer(current_value, new_value):
     if isinstance(new_value, dict) and new_value.get("type") == "override":
         return new_value.get("value", new_value)
     else:
+        # Handle None current_value by using empty list as default
+        if current_value is None:
+            current_value = []
         return operator.add(current_value, new_value)
     
 class AgentInputState(MessagesState):

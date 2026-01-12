@@ -312,8 +312,8 @@ async def find_relevant_passages(
             # Merge: take best from each approach
             if keyword_results and keyword_results[0][2] > top_sources[0][2]:
                 logging.debug(f"[VERIFY] Keyword fallback improved match for: {claim[:40]}...")
-                # Combine and re-sort
-                combined = {s.get('url'): (s, p, sc) for s, p, sc in top_sources}
+                # Combine and re-sort (filter out None URLs to prevent key collision)
+                combined = {s.get('url'): (s, p, sc) for s, p, sc in top_sources if s.get('url')}
                 for s, p, sc in keyword_results:
                     url = s.get('url')
                     if url not in combined or sc > combined[url][2]:
