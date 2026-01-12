@@ -19,7 +19,7 @@ Deep Research Agent — AI-powered research agent that searches the web, gathers
 | Extraction quality | ✅ IMPROVED - avg 24 words, zero > 50 words, zero artifacts |
 | Dedup accuracy | ✅ FIXED - LLM batch + cross-batch text similarity (caught 47 dupes) |
 | Arrangement | ✅ TESTED - correct grouping, 56% exclusion of junk |
-| Query specificity | ⚠️ DILUTED - supervisor loses query nuance |
+| Query specificity | ✅ OK - brief eval shows 5/5 preservation (hypothesis was wrong) |
 
 ## Quality Audit: Complete
 
@@ -307,6 +307,21 @@ Two-stage evaluation to measure pipeline quality:
 - `avg_quality < 2.0` → Something very wrong
 - `duplicate_rate > 20%` → Dedup broken
 
+### Brief Eval (NEW 2026-01-12)
+
+**Goal:** Does query→brief transformation preserve intent?
+
+**Method:** Single LLM call comparing original query to generated brief
+
+**Metrics:**
+| Metric | Target | Meaning |
+|--------|--------|---------|
+| `preservation` | ≥4 | Did brief keep all query specifics? |
+| `dilution` | ≥4 | Did brief avoid generalizing? (5=no dilution) |
+| `assumptions` | ≥4 | Did brief avoid adding constraints? |
+
+**Finding:** Brief transformation scores 5/5/5 - the hypothesis that "supervisor loses query nuance" was wrong. Query specifics are being preserved well.
+
 ### Downstream Eval
 
 **Goal:** Given facts, how good is the report?
@@ -379,10 +394,11 @@ Two-stage evaluation to measure pipeline quality:
 ## Next Steps
 
 1. ~~**Fix duplicate leak**~~ ✅ DONE - Cross-batch dedup added
-2. **Build eval framework** - LLM-based upstream + downstream evals
-3. **Add source scoring** - Domain authority tier (official > papers > news > blogs)
-4. **Preserve query specificity** - Improve supervisor prompt to maintain nuance
+2. ~~**Build eval framework**~~ ✅ DONE - upstream + downstream + brief evals
+3. ~~**Preserve query specificity**~~ ✅ NOT NEEDED - brief eval shows 5/5 preservation
+4. **Add source scoring** - Domain authority tier (official > papers > news > blogs)
 5. **Apply overnight agent findings** - Implement compaction, maxTurns, structured memory
+6. **Run full eval** - Test on larger dataset before declaring pipeline stable
 
 ## Already Tried (Don't Repeat)
 
