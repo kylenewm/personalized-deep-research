@@ -93,6 +93,10 @@ def clean_extracted_text(text: str, max_length: int = 200) -> str:
     text = re.sub(r'-{3,}', ' ', text)
     text = re.sub(r'={3,}', ' ', text)
 
+    # Strip markdown table syntax (pipe characters and surrounding whitespace)
+    # Table row: | cell | cell | → cell cell
+    text = re.sub(r'\s*\|\s*', ' ', text)
+
     # Remove bullet-style prefixes (including markdown *)
     text = re.sub(r'^\s*[-•*]\s*', '', text)
     text = re.sub(r'\s+[-•*]\s+', ' ', text)  # Mid-text bullets
@@ -149,8 +153,8 @@ def is_quality_extraction(text: str, max_words: int = 50) -> bool:
     if word_count > max_words:
         return False
 
-    # Reject table fragments (multiple pipe characters)
-    if text.count('|') > 3:
+    # Reject table fragments (2+ pipe characters = markdown table syntax)
+    if text.count('|') >= 2:
         return False
 
     # Reject metadata blocks
@@ -331,6 +335,9 @@ def find_best_match(
     # max_length=500 to allow up to 3 sentences for full context
     for score, text in candidates:
         if score >= min_score:
+            # Early reject: table rows (2+ pipes = markdown table syntax)
+            if text.count('|') >= 2:
+                continue
             cleaned = clean_extracted_text(text, max_length=500)
             if is_quality_extraction(cleaned):
                 return cleaned, score
