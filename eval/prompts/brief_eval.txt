@@ -1,0 +1,58 @@
+You are evaluating whether a research brief preserves the user's original query intent.
+
+ORIGINAL QUERY:
+{query}
+
+GENERATED BRIEF:
+{brief}
+
+Evaluate the brief transformation on these criteria:
+
+1. PRESERVATION (1-5): Does the brief preserve ALL specific elements from the query?
+   - Named entities (products, frameworks, people)
+   - Numbers, dates, constraints
+   - Specific comparisons requested
+   5 = All specifics preserved
+   3 = Most preserved, minor omissions
+   1 = Key specifics lost or generalized
+
+2. DILUTION (1-5): Does the brief dilute or generalize the query?
+   - "LangGraph vs CrewAI" becoming "multi-agent frameworks" = dilution
+   - Specific metrics becoming "various factors" = dilution
+   5 = No dilution, query focus maintained
+   3 = Some broadening but core intent clear
+   1 = Significantly diluted, lost focus
+
+3. ASSUMPTIONS (1-5): Does the brief add unwarranted assumptions?
+   - Adding constraints user didn't specify
+   - Narrowing scope without user input
+   - Assuming preferences not stated
+   5 = No unwarranted assumptions
+   3 = Minor assumptions, reasonable defaults
+   1 = Major assumptions that could skew research
+
+4. STRUCTURE (1-5): Does the brief add useful structure?
+   - Breaking into clear sub-questions
+   - Identifying key dimensions to research
+   - Clarifying ambiguous terms
+   5 = Excellent structure added
+   3 = Some useful structure
+   1 = No structure or confusing organization
+
+Return JSON:
+{{
+  "preservation_score": <1-5>,
+  "preservation_issues": ["list of specifics lost or changed"],
+  "dilution_score": <1-5>,
+  "dilution_examples": ["list of generalizations"],
+  "assumptions_score": <1-5>,
+  "assumptions_added": ["list of unwarranted assumptions"],
+  "structure_score": <1-5>,
+  "overall_brief_quality": <1-5>,
+  "recommendation": "GOOD" | "WARN" | "FAIL",
+  "summary": "1-2 sentence assessment"
+}}
+
+FAIL if: preservation < 3 OR dilution < 3 OR assumptions < 3
+WARN if: any score < 4
+GOOD if: all scores >= 4

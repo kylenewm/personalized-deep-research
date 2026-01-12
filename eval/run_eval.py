@@ -86,6 +86,48 @@ def extract_prose_from_json(data: dict) -> list[dict]:
 
 
 # =============================================================================
+# Brief Evaluation (Query → Brief transformation quality)
+# =============================================================================
+
+def run_brief_eval(
+    query: str,
+    brief: str,
+    dry_run: bool = False
+) -> dict:
+    """Run brief evaluation (checks for dilution, preservation, assumptions)."""
+
+    if not brief:
+        return {"skip": True, "reason": "No research brief in dataset"}
+
+    # Load and fill prompt
+    prompt_template = load_prompt("brief_eval")
+    safe_query = query.replace("{", "{{").replace("}", "}}")
+    safe_brief = brief.replace("{", "{{").replace("}", "}}")
+    prompt = prompt_template.format(
+        query=safe_query,
+        brief=safe_brief
+    )
+
+    if dry_run:
+        cost = estimate_cost(prompt)
+        return {
+            "dry_run": True,
+            "prompt_chars": len(prompt),
+            "estimated_cost": cost
+        }
+
+    # Call LLM with error handling
+    try:
+        result = call_llm(prompt)
+        if not result:
+            raise ValueError("Empty response from LLM")
+        return result
+    except Exception as e:
+        print(f"[ERROR] Brief LLM call failed: {e}")
+        raise
+
+
+# =============================================================================
 # Upstream Evaluation
 # =============================================================================
 
@@ -215,6 +257,7 @@ def evaluate_dataset(
         raise ValueError(f"Invalid JSON in {path}: {e}")
 
     query = data.get("query", "")
+    brief = data.get("research_brief", "")
 
     # Extract data from JSON
     facts = extract_facts_from_json(data)
@@ -237,6 +280,23 @@ def evaluate_dataset(
 
     print(f"[EVAL] Dataset: {Path(path).name}")
     print(f"[EVAL] Mode: {mode}, Facts: {len(facts)}, Themes: {len(themes)}")
+
+    # Run brief eval (if brief exists)
+    brief_result = {}
+    if brief:
+        print("[EVAL] Running brief eval...")
+        brief_result = run_brief_eval(query, brief, dry_run)
+        if dry_run:
+            print(f"[DRY RUN] Brief: {brief_result.get('prompt_chars', 0)} chars, ~${brief_result.get('estimated_cost', 0):.4f}")
+        elif brief_result.get("skip"):
+            print(f"[EVAL] Brief: SKIP ({brief_result.get('reason')})")
+        else:
+            rec = brief_result.get("recommendation", "N/A")
+            pres = brief_result.get("preservation_score", "N/A")
+            dil = brief_result.get("dilution_score", "N/A")
+            print(f"[EVAL] Brief: {rec} (preservation={pres}, dilution={dil})")
+    else:
+        print("[EVAL] Brief: SKIP (no research_brief in dataset)")
 
     # Run upstream eval
     print("[EVAL] Running upstream eval...")
@@ -275,10 +335,18 @@ def evaluate_dataset(
 
     # Build result
     if dry_run:
-        total_cost = upstream.get("estimated_cost", 0) + downstream.get("estimated_cost", 0)
+        total_cost = (
+            brief_result.get("estimated_cost", 0) +
+            upstream.get("estimated_cost", 0) +
+            downstream.get("estimated_cost", 0)
+        )
         return EvalResult(
             dataset=path,
             mode=mode,
+            brief_preservation=None,
+            brief_dilution=None,
+            brief_assumptions=None,
+            brief_recommendation=None,
             avg_fact_quality=0,
             avg_theme_coverage=0,
             duplicate_rate=0,
@@ -310,9 +378,24 @@ def evaluate_dataset(
     else:
         down_summary = downstream["summary"]
 
+    # Extract brief metrics (if available)
+    brief_preservation = None
+    brief_dilution = None
+    brief_assumptions = None
+    brief_recommendation = None
+    if brief_result and not brief_result.get("skip"):
+        brief_preservation = brief_result.get("preservation_score")
+        brief_dilution = brief_result.get("dilution_score")
+        brief_assumptions = brief_result.get("assumptions_score")
+        brief_recommendation = brief_result.get("recommendation")
+
     return EvalResult(
         dataset=path,
         mode=mode,
+        brief_preservation=brief_preservation,
+        brief_dilution=brief_dilution,
+        brief_assumptions=brief_assumptions,
+        brief_recommendation=brief_recommendation,
         avg_fact_quality=up_summary.get("avg_quality", 0),
         avg_theme_coverage=up_summary.get("avg_coverage", 0),
         duplicate_rate=up_summary.get("duplicate_count", 0) / max(len(facts), 1),
@@ -332,6 +415,19 @@ def print_result(result: EvalResult):
     print(f"\n{'='*60}")
     print(f"EVALUATION RESULT: {Path(result.dataset).name}")
     print(f"{'='*60}")
+
+    # Brief section
+    brief_status = result.brief_status()
+    if "SKIP" not in brief_status:
+        print(f"\nBRIEF ({brief_status}):")
+        if result.brief_preservation is not None:
+            print(f"  Preservation:  {result.brief_preservation:.1f}/5 (target: ≥4)")
+        if result.brief_dilution is not None:
+            print(f"  Dilution:      {result.brief_dilution:.1f}/5 (target: ≥4, higher=less dilution)")
+        if result.brief_assumptions is not None:
+            print(f"  Assumptions:   {result.brief_assumptions:.1f}/5 (target: ≥4, higher=fewer assumptions)")
+    else:
+        print(f"\nBRIEF: {brief_status}")
 
     print(f"\nUPSTREAM ({result.upstream_status()}):")
     print(f"  Fact quality:    {result.avg_fact_quality:.2f} (target: ≥3.5)")

@@ -10,22 +10,34 @@ class EvalResult:
     dataset: str
     mode: str  # mini, medium, full
 
+    # Brief metrics (query → brief transformation)
+    brief_preservation: Optional[float] = None  # Did brief keep query specifics?
+    brief_dilution: Optional[float] = None  # Did brief generalize too much?
+    brief_assumptions: Optional[float] = None  # Did brief add unwarranted assumptions?
+    brief_recommendation: Optional[str] = None  # GOOD/WARN/FAIL
+
     # Upstream metrics
-    avg_fact_quality: float
-    avg_theme_coverage: float
-    duplicate_rate: float
-    low_quality_rate: float
-    match_score_avg: Optional[float]  # From saved data, may not exist
+    avg_fact_quality: float = 0
+    avg_theme_coverage: float = 0
+    duplicate_rate: float = 0
+    low_quality_rate: float = 0
+    match_score_avg: Optional[float] = None  # From saved data, may not exist
 
     # Downstream metrics
-    avg_citation_accuracy: Optional[float]
-    avg_synthesis_quality: Optional[float]
-    uncited_rate: Optional[float]
+    avg_citation_accuracy: Optional[float] = None
+    avg_synthesis_quality: Optional[float] = None
+    uncited_rate: Optional[float] = None
 
     # Meta
-    total_facts: int
-    total_themes: int
-    cost_estimate: float
+    total_facts: int = 0
+    total_themes: int = 0
+    cost_estimate: float = 0
+
+    def brief_status(self) -> str:
+        """Return PASS/WARN/FAIL for brief transformation."""
+        if self.brief_recommendation is None:
+            return "SKIP (no brief)"
+        return self.brief_recommendation
 
     def upstream_status(self) -> str:
         """Return PASS/WARN/FAIL for upstream metrics."""
@@ -74,12 +86,13 @@ class EvalResult:
 
     def overall_status(self) -> str:
         """Return overall PASS/WARN/FAIL."""
+        brief = self.brief_status()
         up = self.upstream_status()
         down = self.downstream_status()
 
-        if "FAIL" in up or "FAIL" in down:
+        if "FAIL" in brief or "FAIL" in up or "FAIL" in down:
             return "FAIL"
-        if "WARN" in up or "WARN" in down:
+        if "WARN" in brief or "WARN" in up or "WARN" in down:
             return "WARN"
         return "PASS"
 
@@ -88,6 +101,12 @@ class EvalResult:
         return {
             "dataset": self.dataset,
             "mode": self.mode,
+            "brief": {
+                "preservation": self.brief_preservation,
+                "dilution": self.brief_dilution,
+                "assumptions": self.brief_assumptions,
+                "status": self.brief_status()
+            },
             "upstream": {
                 "avg_fact_quality": self.avg_fact_quality,
                 "avg_theme_coverage": self.avg_theme_coverage,
