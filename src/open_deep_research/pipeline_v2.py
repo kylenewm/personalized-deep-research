@@ -791,25 +791,36 @@ Research Topic: {topic}
 VERIFIED FACTS (cite using the number in brackets):
 {facts}
 
-Write 2-4 paragraphs of flowing prose that synthesizes these facts into a coherent narrative.
+Write 2-4 paragraphs of flowing prose that synthesizes these facts.
 
-CITATION RULES:
-1. Cite facts using their bracket number: [1], [2], [3], etc.
-2. Example: "platforms can run thousands of tests[3]" or "tools offer CI/CD[2][5]"
-3. You MUST cite at least 80% of the facts provided
-4. Any sentence without a citation is assumed to be YOUR opinion, not verified
-5. If a fact has marketing language, attribute it: "claims to be..." or "according to the vendor..."
+CITATION RULES (STRICT):
+1. EVERY factual claim MUST have a citation: "latency is 200ms[1]"
+2. Use bracket numbers exactly as shown: [1], [2], [3]
+3. Multiple citations allowed: "tools offer fast testing[2][5]"
+4. Cite at least 90% of facts - uncited facts are WASTED
+5. Transitions/opinions need NO citation: "Overall," "In contrast," "This suggests..."
+6. Marketing claims: "claims to be..." or "according to the vendor..."[N]
 {source_quality_guidance}
-CRITICAL: Use the EXACT numbers shown in brackets before each fact.
-Do NOT use any other numbering. Uncited sentences will be marked as unverified.
+BAD (uncited claim):
+  "Hamming achieves sub-200ms latency for voice testing."
+
+GOOD (cited claim):
+  "Hamming achieves sub-200ms latency for voice testing[1]."
+
+BAD (over-cited transition):
+  "In contrast[1][2], these tools differ significantly[3]."
+
+GOOD (natural transition):
+  "In contrast, these tools differ significantly in latency[1] and throughput[2]."
+
+CRITICAL: Use EXACT bracket numbers from the facts. Uncited sentences = unverified opinion.
 
 STYLE:
 - Write like a research analyst, not a list maker
 - Group related points into paragraphs
 - Start with the most important findings
-- Use specific numbers and details from the facts
 
-Output ONLY the prose paragraphs. No JSON, no metadata, no formatting - just the text with [N] citations inline.'''
+Output ONLY prose paragraphs with [N] citations. No JSON, no headers.'''
 
 # Source quality guidance for synthesis - injected when prefer_authoritative_sources=True
 SYNTHESIS_QUALITY_GUIDANCE = """

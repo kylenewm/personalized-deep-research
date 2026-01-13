@@ -19,6 +19,10 @@ from pathlib import Path
 project_root = Path(__file__).parent.parent
 sys.path.insert(0, str(project_root / "src"))
 
+# Load environment variables
+from dotenv import load_dotenv
+load_dotenv(project_root / ".env")
+
 
 # Sample facts for testing citation - diverse topics to test alignment
 TEST_FACTS = [
@@ -72,7 +76,8 @@ async def test_synthesis(theme: str, facts: list, dry_run: bool = False) -> dict
     prompt = THEME_SYNTHESIS_PROMPT.format(
         theme=theme,
         topic="voice agent evaluation and testing",
-        facts=facts_text
+        facts=facts_text,
+        source_quality_guidance=""
     )
 
     client = AsyncOpenAI()
@@ -86,17 +91,8 @@ async def test_synthesis(theme: str, facts: list, dry_run: bool = False) -> dict
     )
     response = resp.choices[0].message.content
 
-    # Parse response
-    prose = ""
-    cited_ids = []
-    try:
-        match = re.search(r'\{[\s\S]*\}', response)
-        if match:
-            data = json.loads(match.group())
-            prose = data.get("prose", "")
-            cited_ids = data.get("cited_ids", [])
-    except json.JSONDecodeError:
-        prose = response
+    # Parse response - now we expect plain prose, not JSON
+    prose = response.strip()
 
     # Find all citations in prose
     found_citations = re.findall(r'\[(\d+)\]', prose)
