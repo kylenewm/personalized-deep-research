@@ -419,6 +419,22 @@ Added example output to README from `agentic_coding_2026.json` gold dataset:
 
 Fix confirmed working. Remaining uncited rate issue is synthesis-related (separate from extraction).
 
+## Synthesis Prompt Strengthening (2026-01-12)
+
+**Problem:** 27% uncited rate on new runs vs 6.4% on gold dataset.
+
+**Changes to THEME_SYNTHESIS_PROMPT:**
+- Raised citation target: 80% → 90%
+- Added explicit GOOD/BAD examples
+- Clarified: transitions don't need citations, claims do
+- Added "over-cited transition" bad example
+
+**Verification:**
+- Citation sandbox: 100% citation rate (no regression)
+- Eval on gold: citation_accuracy 4.80, synthesis 4.40 (no regression)
+
+**Note:** Need full pipeline run to verify improvement on real queries.
+
 ## Next Steps
 
 1. ~~**Fix duplicate leak**~~ ✅ DONE - Cross-batch dedup added
@@ -426,9 +442,10 @@ Fix confirmed working. Remaining uncited rate issue is synthesis-related (separa
 3. ~~**Preserve query specificity**~~ ✅ NOT NEEDED - brief eval shows 5/5 preservation
 4. ~~**Add showcase to README**~~ ✅ DONE - agentic_coding_2026 example
 5. ~~**Debug low match_score issue**~~ ✅ FIXED - Table artifact rejection (0.63 → 0.76)
-6. **Investigate high uncited rate** - Synthesis issue (27% vs 6.4% on similar queries)
-7. **Add source scoring** - Domain authority tier (official > papers > news > blogs)
-8. **Apply overnight agent findings** - Implement compaction, maxTurns, structured memory
+6. ~~**Strengthen synthesis prompt**~~ ✅ DONE - 90% target, GOOD/BAD examples
+7. **Run full pipeline to verify synthesis improvement** - Need new run to measure real impact
+8. **Add source scoring** - Domain authority tier (official > papers > news > blogs)
+9. **Apply overnight agent findings** - Implement compaction, maxTurns, structured memory
 
 ## Already Tried (Don't Repeat)
 
@@ -445,4 +462,4 @@ Fix confirmed working. Remaining uncited rate issue is synthesis-related (separa
 
 ## Last Updated
 
-2026-01-12 — Fixed table artifact extraction (match_score 0.63 → 0.76). Verified fix with re-run. Remaining issue: high uncited rate in synthesis (27% vs 6.4%).
+2026-01-12 — Strengthened synthesis prompt with explicit GOOD/BAD examples and 90% citation target. Fixed citation_sandbox parsing. Need full pipeline run to verify improvement.
