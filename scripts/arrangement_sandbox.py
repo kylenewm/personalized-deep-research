@@ -8,8 +8,9 @@ Measures:
 4. Coverage: all facts accounted for (grouped or excluded)?
 
 Usage:
-    python scripts/arrangement_sandbox.py           # Test arrangement
-    python scripts/arrangement_sandbox.py --dry     # Show test facts without LLM
+    python scripts/arrangement_sandbox.py                                      # Test arrangement
+    python scripts/arrangement_sandbox.py --dry                                # Show test facts without LLM
+    python scripts/arrangement_sandbox.py --fixture tests/fixtures/arrangement/sample.json
 """
 
 import asyncio
@@ -22,6 +23,9 @@ from typing import List, Optional
 
 project_root = Path(__file__).parent.parent
 sys.path.insert(0, str(project_root / "src"))
+
+from dotenv import load_dotenv
+load_dotenv(project_root / ".env")
 
 
 @dataclass
@@ -96,7 +100,8 @@ async def test_arrangement(facts: list, topic: str, dry_run: bool = False) -> di
     prompt = ARRANGER_PROMPT.format(
         topic=topic,
         num_facts=len(facts),
-        facts=facts_text
+        facts=facts_text,
+        source_quality_guidance=""  # Empty for sandbox testing
     )
 
     client = AsyncOpenAI()
@@ -228,12 +233,30 @@ def print_results(results: dict):
     print(f"\n  Status: {'✅ PASS' if passed else '❌ FAIL'}")
 
 
-async def run_sandbox(dry_run: bool = False):
+async def run_sandbox(dry_run: bool = False, fixture_path: str = None):
     """Run arrangement sandbox."""
     print("Arrangement Quality Sandbox")
     print("="*60)
 
-    result = await test_arrangement(TEST_FACTS, TEST_TOPIC, dry_run)
+    # Load facts - from fixture or default
+    if fixture_path:
+        fixture_file = Path(fixture_path)
+        if not fixture_file.exists():
+            print(f"Error: {fixture_path} not found")
+            return
+        with open(fixture_file) as f:
+            data = json.load(f)
+        facts = data.get("facts_before_arrangement", data.get("facts", []))
+        # Handle facts as list of strings or list of dicts
+        if facts and isinstance(facts[0], dict):
+            facts = [f.get("extracted_text", "") for f in facts]
+        topic = data.get("topic", data.get("query", TEST_TOPIC))
+        print(f"Loaded {len(facts)} facts from {fixture_file.name}")
+    else:
+        facts = TEST_FACTS
+        topic = TEST_TOPIC
+
+    result = await test_arrangement(facts, topic, dry_run)
 
     if not result.get("dry_run"):
         print_results(result)
@@ -253,8 +276,13 @@ async def run_sandbox(dry_run: bool = False):
 
 
 def main():
-    dry_run = "--dry" in sys.argv
-    asyncio.run(run_sandbox(dry_run))
+    import argparse
+    parser = argparse.ArgumentParser(description="Arrangement sandbox")
+    parser.add_argument("--dry", action="store_true", help="Show test facts without LLM")
+    parser.add_argument("--fixture", "-f", help="Path to fixture file")
+
+    args = parser.parse_args()
+    asyncio.run(run_sandbox(dry_run=args.dry, fixture_path=args.fixture))
 
 
 if __name__ == "__main__":

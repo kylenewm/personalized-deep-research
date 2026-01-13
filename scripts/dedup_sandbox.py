@@ -5,8 +5,9 @@ Measures false positive/negative rates using LLM semantic matching.
 Uses labeled pairs from tests/fixtures/dedup_labeled_pairs.json.
 
 Usage:
-    python scripts/dedup_sandbox.py           # Test LLM dedup
-    python scripts/dedup_sandbox.py --dry     # Show pairs without LLM call
+    python scripts/dedup_sandbox.py                                  # Test LLM dedup
+    python scripts/dedup_sandbox.py --dry                            # Show pairs without LLM call
+    python scripts/dedup_sandbox.py --fixture tests/fixtures/dedup/sample.json
 """
 
 import asyncio
@@ -16,6 +17,9 @@ from pathlib import Path
 
 project_root = Path(__file__).parent.parent
 sys.path.insert(0, str(project_root / "src"))
+
+from dotenv import load_dotenv
+load_dotenv(project_root / ".env")
 
 from dataclasses import dataclass
 from typing import List, Optional
@@ -198,9 +202,13 @@ def print_results(results: dict):
         print(f"{marker} [{d['id']:2d}] {d['status']} - {d['reason'][:50]}")
 
 
-async def run_sandbox(dry_run: bool = False):
+async def run_sandbox(dry_run: bool = False, fixture_path: str = None):
     """Run dedup sandbox."""
-    pairs_path = project_root / "tests/fixtures/dedup_labeled_pairs.json"
+    if fixture_path:
+        pairs_path = Path(fixture_path)
+    else:
+        pairs_path = project_root / "tests/fixtures/dedup_labeled_pairs.json"
+
     if not pairs_path.exists():
         print(f"Error: {pairs_path} not found")
         return
@@ -208,8 +216,8 @@ async def run_sandbox(dry_run: bool = False):
     with open(pairs_path) as f:
         data = json.load(f)
 
-    pairs = data["pairs"]
-    print(f"Loaded {len(pairs)} labeled pairs")
+    pairs = data.get("pairs", data.get("labeled_pairs", []))
+    print(f"Loaded {len(pairs)} labeled pairs from {pairs_path.name}")
     print(f"  Duplicates: {sum(1 for p in pairs if p['is_duplicate'])}")
     print(f"  Different:  {sum(1 for p in pairs if not p['is_duplicate'])}")
 
@@ -233,8 +241,13 @@ async def run_sandbox(dry_run: bool = False):
 
 
 def main():
-    dry_run = "--dry" in sys.argv
-    asyncio.run(run_sandbox(dry_run))
+    import argparse
+    parser = argparse.ArgumentParser(description="Dedup sandbox")
+    parser.add_argument("--dry", action="store_true", help="Show pairs without LLM call")
+    parser.add_argument("--fixture", "-f", help="Path to fixture file")
+
+    args = parser.parse_args()
+    asyncio.run(run_sandbox(dry_run=args.dry, fixture_path=args.fixture))
 
 
 if __name__ == "__main__":

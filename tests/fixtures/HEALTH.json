@@ -1,0 +1,70 @@
+{
+  "last_updated": "2026-01-12T21:49:13.699955",
+  "last_run_mode": "full",
+  "total_fixtures": 17,
+  "by_directory": {
+    "gold_queries": {
+      "count": 8,
+      "core": 0,
+      "extended": 8
+    },
+    "extraction": {
+      "count": 2,
+      "core": 1,
+      "extended": 1
+    },
+    "dedup": {
+      "count": 1,
+      "core": 1,
+      "extended": 0
+    },
+    "synthesis": {
+      "count": 3,
+      "core": 1,
+      "extended": 2
+    },
+    "arrangement": {
+      "count": 1,
+      "core": 1,
+      "extended": 0
+    },
+    "sources": {
+      "count": 2,
+      "core": 0,
+      "extended": 2
+    }
+  },
+  "total_size_mb": 13.04,
+  "results_summary": {
+    "prompt_sandbox.py:how_do_developers_in_2026_orchestrate_wo_2026-01-12": {
+      "passed": false
+    },
+    "prompt_sandbox.py:how_do_developers_in_2026_orchestrate_wo_2026-01-12_v2": {
+      "passed": true
+    },
+    "dedup_sandbox.py:how_do_developers_in_2026_orchestrate_wo_2026-01-12": {
+      "passed": true
+    },
+    "resynthesis_test.py:how_do_developers_in_2026_orchestrate_wo_2026-01-12": {
+      "passed": true
+    },
+    "resynthesis_test.py:how_do_developers_in_2026_orchestrate_wo_2026-01-12_v1": {
+      "passed": true
+    },
+    "resynthesis_test.py:how_do_developers_in_2026_orchestrate_workflows_in": {
+      "passed": true
+    },
+    "arrangement_sandbox.py:how_do_developers_in_2026_orchestrate_wo_2026-01-12": {
+      "passed": true
+    },
+    "source_authority:how_do_developers_in_2026_orchestrate_wo_2026-01-12": {
+      "passed": true
+    },
+    "source_authority:how_do_developers_in_2026_orchestrate_wo_2026-01-12_v1": {
+      "passed": true
+    },
+    "source_authority:how_do_developers_in_2026_orchestrate_workflows_in": {
+      "passed": true
+    }
+  }
+}

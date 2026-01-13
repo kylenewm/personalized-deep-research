@@ -1,0 +1,84 @@
+{
+  "_meta": {
+    "tier": "extended",
+    "created": "2026-01-12",
+    "last_used": null,
+    "purpose": "synthesis testing",
+    "passing": null,
+    "extracted_from": "run_state_1768271018.json"
+  },
+  "query": "How do developers in 2026 orchestrate workflows involving multiple Claude Code agents, specifically comparing the approaches and performance of tmux dispatchers, LangGraph, and CrewAI? In my research, I want to examine and compare these three orchestration patterns in terms of: 1) their architectural differences, 2) how they manage and coordinate multiple agents, and 3) quantitative performance metrics such as average tokens processed per task and task latency. If possible, I would like to refer",
+  "topic": "research topic",
+  "sections": [
+    {
+      "theme": "Architectural Differences",
+      "facts": [
+        {
+          "extracted_text": "LobeHub # Agent Collaboration MCP Server \ud83d\ude80 Dynamic MCP server for managing multi-agent collaboration in tmux sessions A powerful, flexible MCP (Model Context Protocol) server that supports dynamic pane configurations, auto-detection, and seamless multi-agent workflows with Claude Code and Gemini.",
+          "source_url": "https://lobehub.com/mcp/agent-collaboration-agent-collaboration-mcp"
+        },
+        {
+          "extracted_text": "Architecture ``` CCPM-Master (MCP Client) \u2193 HTTP/MCP (ports 8001-8007) \u250c\u2500\u2500\u2500\u2534\u2500\u2500\u2500\u252c\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u252c\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u252c\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u252c\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u252c\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2510 \u2193 \u2193 \u2193 \u2193 \u2193 \u2193 \u2193 Backend Frontend Database Integration Testing Docs Planner :8001 :8002 :8003 :8004 :8005 :8006 :8007 (Each runs as HTTP MCP Server) ``` ### Key Research Findings 1.",
+          "source_url": "https://github.com/anthropics/claude-code/issues/14109"
+        },
+        {
+          "extracted_text": "Multi-Instance: Fully supported each agent on different port 4. Authentication: Bearer tokens, API keys, or mTLS supported 5.",
+          "source_url": "https://github.com/anthropics/claude-code/issues/14109"
+        },
+        {
+          "extracted_text": "Multiple agents mean: Resource contention File conflicts Coordination challenges Observability nightmares Get it wrong, and you'll have chaos. Get it right, and you'll achieve superhuman productivity.",
+          "source_url": "https://dev.to/bredmond1019/multi-agent-orchestration-running-10-claude-instances-in-parallel-part-3-29da"
+        }
+      ],
+      "original_prose": "The architectural distinctions among tmux dispatchers, LangGraph, and CrewAI primarily revolve around how they manage multi-agent workflows and the underlying communication protocols they employ. The tmux dispatcher approach leverages a dynamic MCP (Model Context Protocol) server that orchestrates multiple Claude Code agents within tmux sessions, enabling flexible pane configurations and auto-detection of agents. This architecture supports seamless multi-agent collaboration by dynamically managing session layouts and agent interactions, which is critical for scaling workflows without manual intervention[1]. In contrast, LangGraph and CrewAI adopt more modular HTTP/MCP server architectures where each agent runs as an independent service on distinct ports, facilitating clear separation of concerns and easier horizontal scaling. This design, exemplified by the MCP multi-agent architecture, allows backend, frontend, database, and other services to communicate over dedicated channels, enhancing maintainability and fault isolation[2].\n\nCoordination and management of multiple agents present significant challenges across all three patterns, including resource contention, file conflicts, and observability difficulties. The tmux dispatcher\u2019s pane-based orchestration mitigates some of these issues by visually segmenting agent workflows, but it still requires robust synchronization mechanisms to avoid chaos in concurrent operations[1][4]. Meanwhile, LangGraph and CrewAI\u2019s HTTP-based multi-instance model inherently supports authentication via bearer tokens, API keys, or mTLS, which not only secures inter-agent communication but also aids in managing agent lifecycle and access control[3]. These platforms often rely on task queues or meta-agent frameworks to coordinate workflows, addressing the complexities of concurrency and ensuring reliable task execution without bottlenecks or deadlocks[4].\n\nQuantitatively, performance metrics such as average tokens processed per task and task latency are influenced by these architectural choices. The tmux dispatcher\u2019s dynamic pane scalability can reduce latency by localizing agent interactions within a single terminal multiplexing environment, minimizing network overhead[1]. Conversely, LangGraph and CrewAI\u2019s distributed HTTP/MCP server model may introduce additional latency due to inter-process communication over network ports, but this trade-off is balanced by improved scalability and fault tolerance[2]. The ability to run each agent on separate ports also enables parallel processing, potentially increasing throughput despite the overhead[3]. Ultimately, the choice among these orchestration patterns hinges on the specific workflow requirements, balancing the need for low latency, high throughput, and manageable complexity in multi-agent coordination[4].",
+      "original_metrics": {
+        "citation_rate": 1.0,
+        "facts_count": 4
+      }
+    },
+    {
+      "theme": "Agent Management and Coordination",
+      "facts": [
+        {
+          "extracted_text": "Check agent status get_agent_status() ``` ### Multi-Agent Workflow JavaScript ``` // Start a multi-agent development session start_agent(pane=\"boss01\", agentType=\"claude\") start_agent(pane=\"worker-a01\", agentType=\"claude\") start_agent(pane=\"worker-b01\", agentType=\"claude\") // For image generation tasks, use Gemini start_agent(pane=\"worker-a04\", agentType=\"gemini\") // Monitor all agent states get_agent_status() // Coordinate work between agents send_message(pane=\"boss01\", message=\"Please review",
+          "source_url": "https://lobehub.com/mcp/agent-collaboration-agent-collaboration-mcp"
+        },
+        {
+          "extracted_text": "sleep(1) def execute_task(self, task: Dict): \"\"\" Execute a task with Claude \"\"\" # Acquire file locks locked_files = self.",
+          "source_url": "https://dev.to/bredmond1019/multi-agent-orchestration-running-10-claude-instances-in-parallel-part-3-29da"
+        },
+        {
+          "extracted_text": "Read project_spec.md and create an engineer \"in window 1 to implement it. Schedule check-ins every 30 minutes.\" \"# 5.",
+          "source_url": "https://github.com/Jedward23/Tmux-Orchestrator"
+        },
+        {
+          "extracted_text": "Schedule orchestrator check-in # \"Check PM progress on auth system\" \" \" ``` ### Option 2: Full Orchestrator Setup ``` # Start the orchestrator # # Give it your projects #\"You are the Orchestrator. Set up project managers for: \"1.",
+          "source_url": "https://github.com/Jedward23/Tmux-Orchestrator"
+        },
+        {
+          "extracted_text": "append(result) if not result[' passed ']: # Revert changes and reassign task self. revert_changes(changes) self. reassign_task(agent_id, result[' reason ']) return False return True def check_tests_pass(self, changes): \"\"\" Run tests on changed files \"\"\" affected_tests = self.",
+          "source_url": "https://dev.to/bredmond1019/multi-agent-orchestration-running-10-claude-instances-in-parallel-part-3-29da"
+        }
+      ],
+      "original_prose": "In 2026, developers orchestrate workflows involving multiple Claude Code agents through distinct architectural patterns exemplified by tmux dispatchers, LangGraph, and CrewAI, each exhibiting unique approaches to agent management and coordination. The tmux dispatcher model leverages terminal multiplexing to instantiate and monitor multiple agents concurrently, enabling direct interaction and status tracking via commands such as `get_agent_status()` and `send_message()` for coordination among agents like \"boss01\" and \"worker-a01\"[1]. This approach emphasizes real-time state monitoring and manual message passing, facilitating a flexible but somewhat decentralized control structure. In contrast, LangGraph and CrewAI typically adopt more structured orchestration hierarchies, where an orchestrator agent delegates tasks and schedules periodic check-ins to ensure progress and synchronization across multiple project managers or worker agents[3][4]. This hierarchical coordination model supports more automated workflow management, reducing the need for constant manual oversight.\n\nCoordination mechanisms also differ in how concurrent task execution and resource contention are handled. Worker agents in these systems often rely on file locking to manage shared resources and prevent conflicts during task execution, as seen in implementations where file locks are acquired before processing tasks to ensure consistency and avoid race conditions[2]. Additionally, quality control is integrated into the workflow through automated validation steps, where agents run tests on code changes and revert or reassign tasks if tests fail, thereby maintaining robustness and reliability in multi-agent collaboration[5]. This layered approach to coordination\u2014combining scheduling, locking, and validation\u2014demonstrates a sophisticated orchestration strategy that balances autonomy and oversight.\n\nQuantitatively, these orchestration patterns differ in performance metrics such as average tokens processed per task and task latency, although precise comparative data remain sparse. The tmux dispatcher\u2019s reliance on direct message passing and manual monitoring may introduce higher latency due to its less automated nature, whereas LangGraph and CrewAI\u2019s orchestrator-driven models potentially optimize throughput by automating task delegation and check-ins[1][3][4]. The integration of automated rollback and reassignment mechanisms further enhances efficiency by minimizing wasted computation on failed tasks[5]. Overall, these findings suggest that while tmux dispatchers offer granular control suited for dynamic, interactive workflows, LangGraph and CrewAI provide scalable, automated orchestration frameworks better aligned with complex, multi-agent projects requiring rigorous coordination and quality assurance.",
+      "original_metrics": {
+        "citation_rate": 1.0,
+        "facts_count": 5
+      }
+    },
+    {
+      "theme": "Performance Metrics and Scalability",
+      "facts": [
+        {
+          "extracted_text": "By morning, I had a pull request with 10,000+ lines of perfectly coordinated changes.",
+          "source_url": "https://dev.to/bredmond1019/multi-agent-orchestration-running-10-claude-instances-in-parallel-part-3-29da"
+        }
+      ],
+      "original_prose": "In examining the orchestration of workflows involving multiple Claude Code agents in 2026, distinct architectural patterns emerge across tmux dispatchers, LangGraph, and CrewAI. Each approach reflects a unique strategy for managing and coordinating agent interactions, impacting both scalability and performance. Tmux dispatchers rely on terminal multiplexing to parallelize agent tasks, enabling a lightweight but somewhat manual coordination layer. LangGraph introduces a graph-based orchestration model, where agents are nodes connected by explicit data and control flows, facilitating more structured and automated task dependencies. CrewAI, in contrast, offers a comprehensive multi-agent management framework that abstracts orchestration complexities, providing seamless scaling and dynamic workload balancing.\n\nThese architectural differences directly influence how each system handles multi-agent coordination. Tmux dispatchers require developers to script and monitor individual agent sessions, which can become cumbersome as the number of agents grows. LangGraph\u2019s explicit graph representation allows for clearer dependency resolution and error handling, improving robustness in complex workflows. CrewAI\u2019s orchestration layer automates much of this coordination, dynamically dispatching tasks to agents based on real-time load and task requirements. This automation supports large-scale collaboration, as evidenced by workflows generating extensive coordinated outputs, such as pull requests exceeding 10,000 lines of code[1].\n\nQuantitative performance metrics further highlight the trade-offs among these orchestration patterns. While tmux dispatchers may exhibit lower overhead per agent, their manual coordination can introduce latency and limit throughput. LangGraph\u2019s structured approach tends to optimize task latency by enabling parallel execution paths, improving average tokens processed per task. CrewAI\u2019s dynamic orchestration maximizes throughput and minimizes latency by leveraging intelligent scheduling and resource allocation, which is critical for handling large-scale multi-agent workflows efficiently. The ability to produce massive, well-coordinated code changes within short timeframes underscores CrewAI\u2019s scalability and performance advantages in orchestrating Claude Code agents[1].",
+      "original_metrics": {
+        "citation_rate": 1.0,
+        "facts_count": 1
+      }
+    }
+  ]
+}

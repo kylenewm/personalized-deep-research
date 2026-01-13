@@ -1,0 +1,204 @@
+{
+  "_meta": {
+    "tier": "core",
+    "created": "2026-01-12",
+    "last_used": null,
+    "purpose": "dedup testing",
+    "passing": null,
+    "extracted_from": "run_state_1768271018.json"
+  },
+  "query": "How do developers in 2026 orchestrate workflows involving multiple Claude Code agents, specifically comparing the approaches and performance of tmux dispatchers, LangGraph, and CrewAI? In my research, I want to examine and compare these three orchestration patterns in terms of: 1) their architectural differences, 2) how they manage and coordinate multiple agents, and 3) quantitative performance metrics such as average tokens processed per task and task latency. If possible, I would like to refer",
+  "pre_dedup": [
+    {
+      "extracted_text": "Architecture ``` CCPM-Master (MCP Client) \u2193 HTTP/MCP (ports 8001-8007) \u250c\u2500\u2500\u2500\u2534\u2500\u2500\u2500\u252c\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u252c\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u252c\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u252c\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u252c\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2510 \u2193 \u2193 \u2193 \u2193 \u2193 \u2193 \u2193 Backend Frontend Database Integration Testing Docs Planner :8001 :8002 :8003 :8004 :8005 :8006 :8007 (Each runs as HTTP MCP Server) ``` ### Key Research Findings 1.",
+      "source_url": "https://github.com/anthropics/claude-code/issues/14109",
+      "match_score": 0.8
+    },
+    {
+      "extracted_text": "Multi-Instance: Fully supported each agent on different port 4. Authentication: Bearer tokens, API keys, or mTLS supported 5.",
+      "source_url": "https://github.com/anthropics/claude-code/issues/14109",
+      "match_score": 0.8
+    },
+    {
+      "extracted_text": "By morning, I had a pull request with 10,000+ lines of perfectly coordinated changes.",
+      "source_url": "https://dev.to/bredmond1019/multi-agent-orchestration-running-10-claude-instances-in-parallel-part-3-29da",
+      "match_score": 0.5
+    },
+    {
+      "extracted_text": "Multiple agents mean: Resource contention File conflicts Coordination challenges Observability nightmares Get it wrong, and you'll have chaos. Get it right, and you'll achieve superhuman productivity.",
+      "source_url": "https://dev.to/bredmond1019/multi-agent-orchestration-running-10-claude-instances-in-parallel-part-3-29da",
+      "match_score": 0.75
+    },
+    {
+      "extracted_text": "sleep(1) def execute_task(self, task: Dict): \"\"\" Execute a task with Claude \"\"\" # Acquire file locks locked_files = self.",
+      "source_url": "https://dev.to/bredmond1019/multi-agent-orchestration-running-10-claude-instances-in-parallel-part-3-29da",
+      "match_score": 0.5
+    },
+    {
+      "extracted_text": "Multiple agents mean: Resource contention File conflicts Coordination challenges Observability nightmares Get it wrong, and you'll have chaos. Get it right, and you'll achieve superhuman productivity.",
+      "source_url": "https://dev.to/bredmond1019/multi-agent-orchestration-running-10-claude-instances-in-parallel-part-3-29da",
+      "match_score": 0.4
+    },
+    {
+      "extracted_text": "append(result) if not result[' passed ']: # Revert changes and reassign task self. revert_changes(changes) self. reassign_task(agent_id, result[' reason ']) return False return True def check_tests_pass(self, changes): \"\"\" Run tests on changed files \"\"\" affected_tests = self.",
+      "source_url": "https://dev.to/bredmond1019/multi-agent-orchestration-running-10-claude-instances-in-parallel-part-3-29da",
+      "match_score": 0.6
+    },
+    {
+      "extracted_text": "The average user jumped between different apps and websites almost 1,200 times a day. Four hours a week were lost as the people in the dataset reoriented themselves after moving to a new app.",
+      "source_url": "https://onereach.ai/blog/agentic-ai-orchestration-enterprise-workflow-automation/",
+      "match_score": 1.0
+    },
+    {
+      "extracted_text": "According to their findings, five working weeks (or 9% of their annual time at work) was lost to task-switching.",
+      "source_url": "https://onereach.ai/blog/agentic-ai-orchestration-enterprise-workflow-automation/",
+      "match_score": 1.0
+    },
+    {
+      "extracted_text": "The business case is organizations implementing enterprise automation 2026 strategies report 30-50% process time reductions and improved accuracy.",
+      "source_url": "https://onereach.ai/blog/agentic-ai-orchestration-enterprise-workflow-automation/",
+      "match_score": 1.0
+    },
+    {
+      "extracted_text": "HitL speeds up the continuous improvement of agentic systems and maintains the integrity of experiences.",
+      "source_url": "https://onereach.ai/blog/agentic-ai-orchestration-enterprise-workflow-automation/",
+      "match_score": 0.75
+    },
+    {
+      "extracted_text": "Read project_spec.md and create an engineer \"in window 1 to implement it. Schedule check-ins every 30 minutes.\" \"# 5.",
+      "source_url": "https://github.com/Jedward23/Tmux-Orchestrator",
+      "match_score": 0.4
+    },
+    {
+      "extracted_text": "Schedule orchestrator check-in # \"Check PM progress on auth system\" \" \" ``` ### Option 2: Full Orchestrator Setup ``` # Start the orchestrator # # Give it your projects #\"You are the Orchestrator. Set up project managers for: \"1.",
+      "source_url": "https://github.com/Jedward23/Tmux-Orchestrator",
+      "match_score": 0.3333333333333333
+    },
+    {
+      "extracted_text": "Schedule orchestrator check-in # \"Check PM progress on auth system\" \" \" ``` ### Option 2: Full Orchestrator Setup ``` # Start the orchestrator # # Give it your projects #\"You are the Orchestrator. Set up project managers for: \"1.",
+      "source_url": "https://github.com/Jedward23/Tmux-Orchestrator",
+      "match_score": 0.4
+    },
+    {
+      "extracted_text": "\u00b7 LobeHub # Agent Collaboration MCP Server \ud83d\ude80 Dynamic MCP server for managing multi-agent collaboration in tmux sessions A powerful, flexible MCP (Model Context Protocol) server that supports dynamic pane configurations, auto-detection, and seamless multi-agent workflows with Claude Code and Gemini.",
+      "source_url": "https://lobehub.com/mcp/agent-collaboration-agent-collaboration-mcp",
+      "match_score": 1.0
+    },
+    {
+      "extracted_text": "\u00b7 LobeHub # Agent Collaboration MCP Server \ud83d\ude80 Dynamic MCP server for managing multi-agent collaboration in tmux sessions A powerful, flexible MCP (Model Context Protocol) server that supports dynamic pane configurations, auto-detection, and seamless multi-agent workflows with Claude Code and Gemini.",
+      "source_url": "https://lobehub.com/mcp/agent-collaboration-agent-collaboration-mcp",
+      "match_score": 0.6666666666666666
+    },
+    {
+      "extracted_text": "\u00b7 LobeHub # Agent Collaboration MCP Server \ud83d\ude80 Dynamic MCP server for managing multi-agent collaboration in tmux sessions A powerful, flexible MCP (Model Context Protocol) server that supports dynamic pane configurations, auto-detection, and seamless multi-agent workflows with Claude Code and Gemini.",
+      "source_url": "https://lobehub.com/mcp/agent-collaboration-agent-collaboration-mcp",
+      "match_score": 0.8
+    },
+    {
+      "extracted_text": "Check agent status get_agent_status() ``` ### Multi-Agent Workflow JavaScript ``` // Start a multi-agent development session start_agent(pane=\"boss01\", agentType=\"claude\") start_agent(pane=\"worker-a01\", agentType=\"claude\") start_agent(pane=\"worker-b01\", agentType=\"claude\") // For image generation tasks, use Gemini start_agent(pane=\"worker-a04\", agentType=\"gemini\") // Monitor all agent states get_agent_status() // Coordinate work between agents send_message(pane=\"boss01\", message=\"Please review",
+      "source_url": "https://lobehub.com/mcp/agent-collaboration-agent-collaboration-mcp",
+      "match_score": 0.6666666666666666
+    },
+    {
+      "extracted_text": "\u00b7 LobeHub # Agent Collaboration MCP Server \ud83d\ude80 Dynamic MCP server for managing multi-agent collaboration in tmux sessions A powerful, flexible MCP (Model Context Protocol) server that supports dynamic pane configurations, auto-detection, and seamless multi-agent workflows with Claude Code and Gemini.",
+      "source_url": "https://lobehub.com/mcp/agent-collaboration-agent-collaboration-mcp",
+      "match_score": 0.6666666666666666
+    },
+    {
+      "extracted_text": "Check agent status get_agent_status() ``` ### Multi-Agent Workflow JavaScript ``` // Start a multi-agent development session start_agent(pane=\"boss01\", agentType=\"claude\") start_agent(pane=\"worker-a01\", agentType=\"claude\") start_agent(pane=\"worker-b01\", agentType=\"claude\") // For image generation tasks, use Gemini start_agent(pane=\"worker-a04\", agentType=\"gemini\") // Monitor all agent states get_agent_status() // Coordinate work between agents send_message(pane=\"boss01\", message=\"Please review",
+      "source_url": "https://lobehub.com/mcp/agent-collaboration-agent-collaboration-mcp",
+      "match_score": 0.6666666666666666
+    },
+    {
+      "extracted_text": "Check agent status get_agent_status() ``` ### Multi-Agent Workflow JavaScript ``` // Start a multi-agent development session start_agent(pane=\"boss01\", agentType=\"claude\") start_agent(pane=\"worker-a01\", agentType=\"claude\") start_agent(pane=\"worker-b01\", agentType=\"claude\") // For image generation tasks, use Gemini start_agent(pane=\"worker-a04\", agentType=\"gemini\") // Monitor all agent states get_agent_status() // Coordinate work between agents send_message(pane=\"boss01\", message=\"Please review",
+      "source_url": "https://lobehub.com/mcp/agent-collaboration-agent-collaboration-mcp",
+      "match_score": 0.6666666666666666
+    },
+    {
+      "extracted_text": "Check agent status get_agent_status() ``` ### Multi-Agent Workflow JavaScript ``` // Start a multi-agent development session start_agent(pane=\"boss01\", agentType=\"claude\") start_agent(pane=\"worker-a01\", agentType=\"claude\") start_agent(pane=\"worker-b01\", agentType=\"claude\") // For image generation tasks, use Gemini start_agent(pane=\"worker-a04\", agentType=\"gemini\") // Monitor all agent states get_agent_status() // Coordinate work between agents send_message(pane=\"boss01\", message=\"Please review",
+      "source_url": "https://lobehub.com/mcp/agent-collaboration-agent-collaboration-mcp",
+      "match_score": 0.5
+    },
+    {
+      "extracted_text": "\u00b7 LobeHub # Agent Collaboration MCP Server \ud83d\ude80 Dynamic MCP server for managing multi-agent collaboration in tmux sessions A powerful, flexible MCP (Model Context Protocol) server that supports dynamic pane configurations, auto-detection, and seamless multi-agent workflows with Claude Code and Gemini.",
+      "source_url": "https://lobehub.com/mcp/agent-collaboration-agent-collaboration-mcp",
+      "match_score": 0.75
+    }
+  ],
+  "post_dedup": [
+    {
+      "extracted_text": "The average user jumped between different apps and websites almost 1,200 times a day. Four hours a week were lost as the people in the dataset reoriented themselves after moving to a new app.",
+      "source_url": "https://onereach.ai/blog/agentic-ai-orchestration-enterprise-workflow-automation/",
+      "match_score": 1.0
+    },
+    {
+      "extracted_text": "According to their findings, five working weeks (or 9% of their annual time at work) was lost to task-switching.",
+      "source_url": "https://onereach.ai/blog/agentic-ai-orchestration-enterprise-workflow-automation/",
+      "match_score": 1.0
+    },
+    {
+      "extracted_text": "The business case is organizations implementing enterprise automation 2026 strategies report 30-50% process time reductions and improved accuracy.",
+      "source_url": "https://onereach.ai/blog/agentic-ai-orchestration-enterprise-workflow-automation/",
+      "match_score": 1.0
+    },
+    {
+      "extracted_text": "\u00b7 LobeHub # Agent Collaboration MCP Server \ud83d\ude80 Dynamic MCP server for managing multi-agent collaboration in tmux sessions A powerful, flexible MCP (Model Context Protocol) server that supports dynamic pane configurations, auto-detection, and seamless multi-agent workflows with Claude Code and Gemini.",
+      "source_url": "https://lobehub.com/mcp/agent-collaboration-agent-collaboration-mcp",
+      "match_score": 1.0
+    },
+    {
+      "extracted_text": "Architecture ``` CCPM-Master (MCP Client) \u2193 HTTP/MCP (ports 8001-8007) \u250c\u2500\u2500\u2500\u2534\u2500\u2500\u2500\u252c\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u252c\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u252c\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u252c\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u252c\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2510 \u2193 \u2193 \u2193 \u2193 \u2193 \u2193 \u2193 Backend Frontend Database Integration Testing Docs Planner :8001 :8002 :8003 :8004 :8005 :8006 :8007 (Each runs as HTTP MCP Server) ``` ### Key Research Findings 1.",
+      "source_url": "https://github.com/anthropics/claude-code/issues/14109",
+      "match_score": 0.8
+    },
+    {
+      "extracted_text": "Multi-Instance: Fully supported each agent on different port 4. Authentication: Bearer tokens, API keys, or mTLS supported 5.",
+      "source_url": "https://github.com/anthropics/claude-code/issues/14109",
+      "match_score": 0.8
+    },
+    {
+      "extracted_text": "Multiple agents mean: Resource contention File conflicts Coordination challenges Observability nightmares Get it wrong, and you'll have chaos. Get it right, and you'll achieve superhuman productivity.",
+      "source_url": "https://dev.to/bredmond1019/multi-agent-orchestration-running-10-claude-instances-in-parallel-part-3-29da",
+      "match_score": 0.75
+    },
+    {
+      "extracted_text": "HitL speeds up the continuous improvement of agentic systems and maintains the integrity of experiences.",
+      "source_url": "https://onereach.ai/blog/agentic-ai-orchestration-enterprise-workflow-automation/",
+      "match_score": 0.75
+    },
+    {
+      "extracted_text": "Check agent status get_agent_status() ``` ### Multi-Agent Workflow JavaScript ``` // Start a multi-agent development session start_agent(pane=\"boss01\", agentType=\"claude\") start_agent(pane=\"worker-a01\", agentType=\"claude\") start_agent(pane=\"worker-b01\", agentType=\"claude\") // For image generation tasks, use Gemini start_agent(pane=\"worker-a04\", agentType=\"gemini\") // Monitor all agent states get_agent_status() // Coordinate work between agents send_message(pane=\"boss01\", message=\"Please review",
+      "source_url": "https://lobehub.com/mcp/agent-collaboration-agent-collaboration-mcp",
+      "match_score": 0.6666666666666666
+    },
+    {
+      "extracted_text": "append(result) if not result[' passed ']: # Revert changes and reassign task self. revert_changes(changes) self. reassign_task(agent_id, result[' reason ']) return False return True def check_tests_pass(self, changes): \"\"\" Run tests on changed files \"\"\" affected_tests = self.",
+      "source_url": "https://dev.to/bredmond1019/multi-agent-orchestration-running-10-claude-instances-in-parallel-part-3-29da",
+      "match_score": 0.6
+    },
+    {
+      "extracted_text": "By morning, I had a pull request with 10,000+ lines of perfectly coordinated changes.",
+      "source_url": "https://dev.to/bredmond1019/multi-agent-orchestration-running-10-claude-instances-in-parallel-part-3-29da",
+      "match_score": 0.5
+    },
+    {
+      "extracted_text": "sleep(1) def execute_task(self, task: Dict): \"\"\" Execute a task with Claude \"\"\" # Acquire file locks locked_files = self.",
+      "source_url": "https://dev.to/bredmond1019/multi-agent-orchestration-running-10-claude-instances-in-parallel-part-3-29da",
+      "match_score": 0.5
+    },
+    {
+      "extracted_text": "Read project_spec.md and create an engineer \"in window 1 to implement it. Schedule check-ins every 30 minutes.\" \"# 5.",
+      "source_url": "https://github.com/Jedward23/Tmux-Orchestrator",
+      "match_score": 0.4
+    },
+    {
+      "extracted_text": "Schedule orchestrator check-in # \"Check PM progress on auth system\" \" \" ``` ### Option 2: Full Orchestrator Setup ``` # Start the orchestrator # # Give it your projects #\"You are the Orchestrator. Set up project managers for: \"1.",
+      "source_url": "https://github.com/Jedward23/Tmux-Orchestrator",
+      "match_score": 0.4
+    }
+  ],
+  "pre_dedup_count": 23,
+  "post_dedup_count": 14,
+  "dedup_removed": 9,
+  "labeled_pairs": []
+}

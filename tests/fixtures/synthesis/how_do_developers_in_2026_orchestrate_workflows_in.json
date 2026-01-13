@@ -1,0 +1,284 @@
+{
+  "query": "How do developers in 2026 orchestrate workflows involving multiple Claude Code agents, specifically ",
+  "topic": "research topic",
+  "created_from": "run_state_1768263187.json",
+  "created_at": "2026-01-12",
+  "sections": [
+    {
+      "theme": "tmux Dispatchers and MCP Server for Claude Code Agents",
+      "facts": [
+        {
+          "extracted_text": "Dynamic MCP server for managing multi-agent collaboration in tmux sessions A powerful, flexible MCP (Model Context Protocol) server that supports dynamic pane configurations, auto-detection, and seamless multi-agent workflows with Claude Code and Gemini.",
+          "source_url": "https://lobehub.com/mcp/agent-collaboration-agent-collaboration-mcp"
+        },
+        {
+          "extracted_text": "Claude Agent SDK For HTTP MCP server wrapper 2. Token management Secure agent authentication 3.",
+          "source_url": "https://github.com/anthropics/claude-code/issues/14109"
+        },
+        {
+          "extracted_text": "Check agent status get_agent_status() ``` ### Multi-Agent Workflow JavaScript ``` // Start a multi-agent development session start_agent(pane=\"boss01\", agentType=\"claude\") start_agent(pane=\"worker-a01\", agentType=\"claude\") start_agent(pane=\"worker-b01\", agentType=\"claude\") // For image generation tasks, use Gemini start_agent(pane=\"worker-a04\", agentType=\"gemini\") // Monitor all agent states get_agent_status() // Coordinate work between agents send_message(pane=\"boss01\", message=\"Please review",
+          "source_url": "https://lobehub.com/mcp/agent-collaboration-agent-collaboration-mcp"
+        },
+        {
+          "extracted_text": "Dispatching Sub-Agents Claude Code can dispatch sub-agents to tackle individual tasks. The purpose of this is A: managing the context window and avoiding too long context and B: speed through parallelism.",
+          "source_url": "https://jannesklaas.github.io/ai/2025/07/20/claude-code-agent-design.html"
+        },
+        {
+          "extracted_text": "From Terminal to Everywhere AI coding in 2025 started with a terminal-based approach\u2014 Claude Code and Gemini CLI made developers feel like command-line wizards again.",
+          "source_url": "https://medium.com/ai-software-engineer/12-ai-coding-emerging-trends-that-will-dominate-2026-dont-miss-out-dae9f4a76592"
+        },
+        {
+          "extracted_text": "Document new tmux commands and patterns in CLAUDE.md 2. Share novel use cases and agent coordination strategies 3.",
+          "source_url": "https://github.com/Jedward23/Tmux-Orchestrator"
+        }
+      ],
+      "original_prose": "In 2026, developers orchestrating multiple Claude Code agents have increasingly relied on tmux dispatchers integrated with a dynamic MCP (Model Context Protocol) server to manage complex multi-agent workflows efficiently. The MCP server claims to offer powerful and flexible support for dynamic pane configurations and auto-detection, enabling seamless collaboration between Claude Code and Gemini agents within tmux sessions. This architecture facilitates parallel task execution by dispatching sub-agents to individual panes, which helps manage context window sizes and reduces latency through concurrent processing[1][4]. The ability to monitor and coordinate agent states programmatically via commands such as get_agent_status() and send_message() further enhances workflow orchestration, allowing developers to maintain fine-grained control over agent interactions and task delegation[3].\n\nCompared to emerging platforms like LangGraph and CrewAI, which emphasize graph-based orchestration and AI-driven task management respectively, the tmux dispatcher approach remains favored for its low-latency, token-efficient execution in terminal environments. The tmux-based MCP server architecture reportedly optimizes tokens per task by isolating sub-tasks into distinct agent contexts, thereby avoiding the overhead of excessively long context windows that can degrade performance[4]. This contrasts with some higher-level orchestration frameworks that may introduce additional latency due to abstraction layers. Moreover, the CLI-centric paradigm, popularized since 2025, continues to resonate with developers who value direct, scriptable control over agent workflows, reinforcing tmux\u2019s role as a lightweight yet robust dispatcher environment[5][6].\n\nThe Claude Agent SDK further complements this ecosystem by providing secure HTTP wrappers around the MCP server, enabling token management and secure agent authentication that are critical for scalable multi-agent deployments[2]. This integration ensures that token usage is optimized not only at the orchestration level but also in terms of secure and efficient communication between agents and the server. Overall, the tmux dispatcher combined with the MCP server represents a mature, developer-friendly solution that balances token efficiency and latency, making it a compelling choice for orchestrating Claude Code agents in 2026.",
+      "original_citation_rate": 1.0
+    },
+    {
+      "theme": "LangGraph Framework: Architecture, Performance, and Metrics",
+      "facts": [
+        {
+          "extracted_text": "Specialized Agents: Five containerized agents handle specific domains: Supervisor Agent: Central orchestrator and conversation manager Order Management Agent: Handles order tracking, returns, and inventory queries Product Recommendation Agent: Provides personalized product suggestions Personalization Agent: Manages customer profiles and preferences Troubleshooting Agent: Resolves technical issues and provides support guidance 5.",
+          "source_url": "https://github.com/aws-solutions-library-samples/guidance-for-multi-agent-orchestration-langgraph-on-aws"
+        },
+        {
+          "extracted_text": "LangGraph LangGraph provides production-grade performance for stateful agent workflows with built-in persistence, enabling complex multi-agent systems with controllable execution overhead. Performance is primarily bounded by LLM API latency rather than framework overhead.",
+          "source_url": "https://www.index.dev/skill-vs-skill/ai-langgraph-vs-n8n-vs-flowise"
+        },
+        {
+          "extracted_text": "Performance-wise, LangGraph offers lowest latency for production deployments when optimized, while Flowise and n8n introduce overhead from their abstraction layers but enable faster iteration cycles.",
+          "source_url": "https://www.index.dev/skill-vs-skill/ai-langgraph-vs-n8n-vs-flowise"
+        },
+        {
+          "extracted_text": "Multi-agent application For this demonstration, I have attached the LangGraph code of a Customer Service application. The application accepts tickets from the user, classifies into Technical, Billing or Both using a Triage agent, then routes it to the Technical Support agent, Billing Support agent or to both of them.",
+          "source_url": "https://towardsdatascience.com/production-grade-observability-for-ai-agents-a-minimal-code-configuration-first-approach/"
+        },
+        {
+          "extracted_text": "Multi-step task completion rate reached 91% for complex filings requiring 8-12 sequential operations. Context window utilization efficiency of 73% enabled processing of 200-page documents while maintaining regulatory accuracy standards.",
+          "source_url": "https://www.index.dev/skill-vs-skill/ai-langgraph-vs-n8n-vs-flowise"
+        },
+        {
+          "extracted_text": "LangGraph LangGraph is a specialized framework within the LangChain ecosystem that focuses on building controllable, stateful agents with streaming support. With over 14,000 GitHub stars and 4.2 million monthly downloads, it has demonstrated strong enterprise adoption, with companies like Klarna reducing customer support resolution time by 80%.",
+          "source_url": "https://www.datacamp.com/blog/best-ai-agents"
+        },
+        {
+          "extracted_text": "A three-step process was followed to scale the application: profiling the application as a single user, running a load test to estimate hardware needs, and monitoring the application during a phased rollout using OpenTelemetry and Datadog.",
+          "source_url": "https://developer.nvidia.com/blog/how-to-scale-your-langgraph-agents-in-production-from-a-single-user-to-1000-coworkers/"
+        },
+        {
+          "extracted_text": "Reports suggest that ~400 companies use LangGraph in live multi-agent workflow systems a notable indicator of production maturity and reliability for complex pipelines.",
+          "source_url": "https://datamites.com/blog/crewai-vs-autogen-vs-langgraph-top-multi-agent-frameworks/?srsltid=AfmBOoo-T1ircKMuwhEfFJshVcj99oAFMuYZaz3vCjYEsuax86IOj0CE"
+        },
+        {
+          "extracted_text": "Scalability benchmarks Independent comparisons indicate that LangGraph can handle >10 000 concurrent agent interactions with sub-millisecond latencies in high-traffic production scenarios, underscoring its scalability for enterprise workloads.",
+          "source_url": "https://datamites.com/blog/crewai-vs-autogen-vs-langgraph-top-multi-agent-frameworks/?srsltid=AfmBOoo-T1ircKMuwhEfFJshVcj99oAFMuYZaz3vCjYEsuax86IOj0CE"
+        },
+        {
+          "extracted_text": "For example, a workflow built to answer product related questions might process the type of question first, and then route the request to specific processes for pricing, refunds, returns, etc.",
+          "source_url": "https://docs.langchain.com/oss/python/langgraph/workflows-agents"
+        },
+        {
+          "extracted_text": "They operate in continuous feedback loops, and are used in situations where problems and solutions are unpredictable. Agents have more autonomy than workflows, and can make decisions about the tools they use and how to solve problems.",
+          "source_url": "https://docs.langchain.com/oss/python/langgraph/workflows-agents"
+        },
+        {
+          "extracted_text": "Understanding LangGraph and LangGraph Studio LangGraph implements state machines and directed graphs for multi-agent orchestration.",
+          "source_url": "https://aws.amazon.com/blogs/machine-learning/build-multi-agent-systems-with-langgraph-and-amazon-bedrock/"
+        },
+        {
+          "extracted_text": "The agents communicate through a state-based graph system implemented using LangGraph, where the Supervisor Agent directs the flow of information and tasks between the specialized agents.",
+          "source_url": "https://aws.amazon.com/blogs/machine-learning/build-multi-agent-systems-with-langgraph-and-amazon-bedrock/"
+        },
+        {
+          "extracted_text": "AI/ML Services: Amazon Bedrock with Claude 3.5 Haiku cross-region inference for natural language processing and reasoning 7.",
+          "source_url": "https://github.com/aws-solutions-library-samples/guidance-for-multi-agent-orchestration-langgraph-on-aws"
+        },
+        {
+          "extracted_text": "For the AI-Q research agent, the main bottleneck were calls to the NVIDIA Llama Nemotron Super 49B reasoning LLM.",
+          "source_url": "https://developer.nvidia.com/blog/how-to-scale-your-langgraph-agents-in-production-from-a-single-user-to-1000-coworkers/"
+        },
+        {
+          "extracted_text": "Using a minimal-code, configuration-first approach, teams can enable LLM-as-a-Judge evaluation, regression testing, and full MELT observability without building and maintaining custom pipelines.",
+          "source_url": "https://towardsdatascience.com/production-grade-observability-for-ai-agents-a-minimal-code-configuration-first-approach/"
+        },
+        {
+          "extracted_text": "We can view the result of a selected test with Conciseness, GT Accuracy and Relevance scores for each test case in one dashboard.",
+          "source_url": "https://towardsdatascience.com/production-grade-observability-for-ai-agents-a-minimal-code-configuration-first-approach/"
+        },
+        {
+          "extracted_text": "Build times are fast due to no-code nature. Best for rapid prototyping and medium-scale deployments. LangGraph LangGraph provides production-grade performance for stateful agent workflows with built-in persistence, enabling complex multi-agent systems with controllable execution overhead.",
+          "source_url": "https://www.index.dev/skill-vs-skill/ai-langgraph-vs-n8n-vs-flowise"
+        },
+        {
+          "extracted_text": "LangGraph Cloud offers managed deployment with usage-based pricing.",
+          "source_url": "https://www.index.dev/skill-vs-skill/ai-langgraph-vs-n8n-vs-flowise"
+        },
+        {
+          "extracted_text": "Data Layer: Amazon Aurora PostgreSQL for structured data, Amazon Bedrock Knowledge Base for unstructured data 6. AI/ML Services: Amazon Bedrock with Claude 3.5 Haiku cross-region inference for natural language processing and reasoning 7.",
+          "source_url": "https://github.com/aws-solutions-library-samples/guidance-for-multi-agent-orchestration-langgraph-on-aws"
+        },
+        {
+          "extracted_text": "Reducers make that process simple and predictable. So, in short: > A Reducer helps your LangGraph workflow make sense of many outputs by turning them into one clear, useful result. Reducers are key to understanding how updates from nodes are applied to the `State`.",
+          "source_url": "https://medium.com/@syedhassaniiui/langgraph-multi-agent-application-7f00a6d809f5"
+        },
+        {
+          "extracted_text": "LangGraph Studio enhances development with graph visualization, execution monitoring, and runtime debugging capabilities.",
+          "source_url": "https://aws.amazon.com/blogs/machine-learning/build-multi-agent-systems-with-langgraph-and-amazon-bedrock/"
+        },
+        {
+          "extracted_text": "It shows the LangGraph nodes (agents) and the LLM calls along with the token usage.",
+          "source_url": "https://towardsdatascience.com/production-grade-observability-for-ai-agents-a-minimal-code-configuration-first-approach/"
+        }
+      ],
+      "original_prose": "In 2026, developers orchestrating multiple Claude Code agents increasingly rely on specialized frameworks like LangGraph, which offers a robust architecture for managing complex multi-agent workflows with stateful persistence and controllable execution overhead. LangGraph\u2019s design centers on a supervisor-agent pattern, where a central Supervisor Agent coordinates domain-specific containerized agents such as Order Management, Product Recommendation, Personalization, and Troubleshooting agents, enabling modular and scalable task delegation [1][13]. This architecture supports sophisticated multi-step processes, exemplified by customer service applications that classify and route tickets through triage to appropriate support agents, achieving a multi-step task completion rate of 91% on workflows requiring 8-12 sequential operations with efficient context window utilization of 73% [4][5]. The framework\u2019s use of state machines and directed graphs facilitates precise orchestration and real-time state management, with reducers consolidating outputs into coherent state updates, further enhancing workflow predictability and clarity [12][21].\n\nPerformance metrics reveal LangGraph\u2019s competitive edge in latency and scalability compared to alternative orchestration tools such as tmux dispatchers and CrewAI. Independent benchmarks demonstrate LangGraph\u2019s ability to handle over 10,000 concurrent agent interactions with sub-millisecond latencies, underscoring its suitability for high-traffic enterprise environments [9]. The framework\u2019s latency is primarily bounded by the underlying LLM API calls rather than its own overhead, with optimized deployments achieving the lowest latency among production-grade solutions, whereas other platforms like Flowise and n8n incur additional overhead due to abstraction layers despite enabling faster iteration cycles [2][3]. Token usage per task is closely monitored through integrated telemetry and visualization tools in LangGraph Studio, which provide detailed insights into node-level LLM calls and token consumption, supporting efficient resource management and debugging [22][23].\n\nLangGraph\u2019s integration with cloud-native AI/ML services, particularly Amazon Bedrock\u2019s Claude 3.5 Haiku model, facilitates cross-region inference and natural language reasoning, enhancing the intelligence and responsiveness of agent workflows [14][20]. The vendor claims that enterprises such as Klarna have leveraged LangGraph to reduce customer support resolution times by up to 80%, highlighting the framework\u2019s impact on operational efficiency and customer experience [6]. Development teams benefit from a minimal-code, configuration-first approach that accelerates build times and supports full observability through MELT pipelines, enabling continuous evaluation with metrics like Conciseness, Ground Truth Accuracy, and Relevance in a unified dashboard [16][17][18]. Production deployments are further supported by rigorous profiling, load testing, and monitoring using tools like OpenTelemetry and Datadog, ensuring scalable and reliable rollouts [7].\n\nCompared to tmux dispatchers, which primarily provide terminal multiplexing without native state management or multi-agent orchestration capabilities, and CrewAI, which offers agent autonomy but less emphasis on stateful workflows and enterprise-grade persistence, LangGraph presents a more comprehensive solution for orchestrating Claude Code agents in complex, unpredictable problem domains [11]. Its extensive adoption\u2014reported by approximately 400 companies\u2014and strong community engagement, evidenced by over 14,000 GitHub stars and millions of downloads, attest to its maturity and reliability in production environments [6][8]. Overall, LangGraph\u2019s architecture, performance, and observability features position it as a leading framework for orchestrating multi-agent Claude Code systems with high efficiency and scalability in 2026.",
+      "original_citation_rate": 0.87
+    },
+    {
+      "theme": "CrewAI Framework: Architecture, Adoption, and Performance",
+      "facts": [
+        {
+          "extracted_text": "CrewAI CrewAI orchestrates role-playing AI agents for collaborative tasks with a focus on simplicity and minimal setup requirements. Launched in early 2024, it has gained over 32,000 GitHub stars and nearly 1 million monthly downloads, making it popular for customer service and marketing automation.",
+          "source_url": "https://www.datacamp.com/blog/best-ai-agents"
+        },
+        {
+          "extracted_text": "By mid-2025, CrewAI reported ~150+ enterprise customers and 100,000+ daily agent executions, indicating notable adoption traction in business workflows.",
+          "source_url": "https://datamites.com/blog/crewai-vs-autogen-vs-langgraph-top-multi-agent-frameworks/?srsltid=AfmBOoo-T1ircKMuwhEfFJshVcj99oAFMuYZaz3vCjYEsuax86IOj0CE"
+        },
+        {
+          "extracted_text": "Under the hood, crew.kickoff() will direct the workflow based on the process type: In sequential mode, CrewAI will simply iterate over the list of tasks. In hierarchical mode, the manager agent may determine ordering or dynamically create tasks.",
+          "source_url": "https://www.digitalocean.com/community/tutorials/crewai-crash-course-role-based-agent-orchestration"
+        },
+        {
+          "extracted_text": "\ud83d\udc68\u200d\ud83d\udcbb Why you need it: Most multi-agent frameworks look great in demos but collapse under real complexity. CrewAI is built differently: it\u2019s composable, Python-native, async-ready, and surprisingly stable at scale.",
+          "source_url": "https://grokkingtechcareer.substack.com/p/10-tools-every-developer-needs-in"
+        },
+        {
+          "extracted_text": "The company has since surpassed that goal, now powering 1.4B agentic automations across the world\u2019s largest enterprises, including PwC, IBM, Capgemini, and NVIDIA. \u201cNowadays, we\u2019re running around 450 million Agents a month,\u201d says Moura.",
+          "source_url": "https://www.insightpartners.com/ideas/crewai-scaleup-ai-story/"
+        },
+        {
+          "extracted_text": "While CrewAI is now used by more than 60% of Fortune 500 companies, \u201cmany [companies] just don\u2019t want to be vocal,\u201d Moura says.",
+          "source_url": "https://www.insightpartners.com/ideas/crewai-scaleup-ai-story/"
+        },
+        {
+          "extracted_text": "All coordinated by an agent manager who organizes the team. The strength of Crew AI lies in its role-based logic, its shared contextual memory system, and its capacity to manage complex inter-agent communications.",
+          "source_url": "https://datascientest.com/en/all-about-crew-ai"
+        },
+        {
+          "extracted_text": "Daily downloads and usage benchmarks show CrewAI performing well on structured tasks against alternatives, with reported execution speeds up to ~5.76 \u00d7 faster than LangGraph in some QA-task benchmarks.",
+          "source_url": "https://datamites.com/blog/crewai-vs-autogen-vs-langgraph-top-multi-agent-frameworks/?srsltid=AfmBOoo-T1ircKMuwhEfFJshVcj99oAFMuYZaz3vCjYEsuax86IOj0CE"
+        },
+        {
+          "extracted_text": "CrewAI gives developers high-level simplicity and low-level control. It is optimized for production-ready multi-agent workflows that care about reliability, observability, and cost efficiency.",
+          "source_url": "https://www.digitalocean.com/community/tutorials/crewai-crash-course-role-based-agent-orchestration"
+        },
+        {
+          "extracted_text": "This role-based architecture works well for tackling complex tasks by breaking them down into specialised sub-tasks. Like LangChain, CrewAI focuses on agentic logic rather than the underlying plumbing. If an agent needs to access a user's Google Calendar, the developer must implement the entire authentication and integration layer from scratch.",
+          "source_url": "https://composio.dev/blog/best-ai-agent-builders-and-integrations"
+        },
+        {
+          "extracted_text": "But what sets Crew AI apart in this burgeoning landscape is its ease of setup, its modular logic, and its immediate effectiveness.",
+          "source_url": "https://datascientest.com/en/all-about-crew-ai"
+        },
+        {
+          "extracted_text": "Anecdotal industry reporting claims 60 % of Fortune 500 companies use CrewAI in some capacity for content, task orchestration, and internal workflow automation.",
+          "source_url": "https://datamites.com/blog/crewai-vs-autogen-vs-langgraph-top-multi-agent-frameworks/?srsltid=AfmBOoo-T1ircKMuwhEfFJshVcj99oAFMuYZaz3vCjYEsuax86IOj0CE"
+        },
+        {
+          "extracted_text": "Within six months, the company had attracted 150 enterprise customers. And by October 2024, Crew AI had raised $18M in funding, including a Series A led by Insight Partners.",
+          "source_url": "https://www.insightpartners.com/ideas/crewai-scaleup-ai-story/"
+        },
+        {
+          "extracted_text": "So a lot of them just prefer to do things internally \u2026 business as usual.\u201d Behind the scenes, he adds, these companies are reaping huge efficiency gains \u2014 in some cases up to 94%, according to Moura \u2014 by automating back-office processes that previously cost millions to run.",
+          "source_url": "https://www.insightpartners.com/ideas/crewai-scaleup-ai-story/"
+        },
+        {
+          "extracted_text": "For most teams starting agent development, CrewAI or LangChain provides the best balance of capability and approachability. As applications mature and requirements become more sophisticated, frameworks like LangGraph or AutoGen offer the advanced features needed for complex production systems.",
+          "source_url": "https://www.secondtalent.com/resources/top-llm-frameworks-for-building-ai-agents/"
+        },
+        {
+          "extracted_text": "You define AI agents and tasks, CrewAI builds and orchestrates them Planning Reasoning Tools memory KNOWLEDGE collaboration PlanningReasoningToolsMemoryKnowledgeCollaboration Request a demo ### Planning Crews of AI agents can take advantage of a specialized planning agent which will create a step-by-step plan for all tasks, and share it with the crew.",
+          "source_url": "https://www.crewai.com/open-source"
+        },
+        {
+          "extracted_text": "CrewAI provides AI agents with 100s of open-source tools out of the box to, for example, search the Internet, interact with websites, query vector databases and much more.",
+          "source_url": "https://www.crewai.com/open-source"
+        },
+        {
+          "extracted_text": "A strong engineering discipline is essential. Effective CrewAI systems rely on guardrails, including clear task specifications, bounded delegation, iteration limits, tool grounding, and proper observability, to prevent loops, hallucinations, and cost overruns. ## What is CrewAI? CrewAI is a role-based multi-agent framework for Python.",
+          "source_url": "https://www.digitalocean.com/community/tutorials/crewai-crash-course-role-based-agent-orchestration"
+        },
+        {
+          "extracted_text": "Add alerts on failures/latency, track tokens and cost per task, and monitor throughput for scaling decisions.",
+          "source_url": "https://www.digitalocean.com/community/tutorials/crewai-crash-course-role-based-agent-orchestration"
+        },
+        {
+          "extracted_text": "Ship traces/metrics to an observability backend (e.g., Langfuse for LLM traces, Datadog for logs/metrics/alerts, Arize/Phoenix for model monitoring, LangSmith/LangTrace for unified tracing, Neatlogs for shareable run replays). Add alerts on failures/latency, track tokens and cost per task, and monitor throughput for scaling decisions.",
+          "source_url": "https://www.digitalocean.com/community/tutorials/crewai-crash-course-role-based-agent-orchestration"
+        },
+        {
+          "extracted_text": "A: Yes, CrewAI is open-source and actively encourages community contributions and collaboration.",
+          "source_url": "https://github.com/crewAIInc/crewAI"
+        },
+        {
+          "extracted_text": "Role-based agents improve clarity and scalability. Agents are assigned explicit roles (Researcher, Writer, Manager, etc.) instead of a monolithic prompt. Roles support clean, scalable task decomposition and agent collaboration. The core mental model is simple and powerful. CrewAI\u2019s mental model is based on four primitives: Agents, Tasks, Tools, and Crew.",
+          "source_url": "https://www.digitalocean.com/community/tutorials/crewai-crash-course-role-based-agent-orchestration"
+        },
+        {
+          "extracted_text": "Enable CrewAI tracing (config/flag/env per docs) so every run generates trace data with a unique identifier.",
+          "source_url": "https://www.digitalocean.com/community/tutorials/crewai-crash-course-role-based-agent-orchestration"
+        },
+        {
+          "extracted_text": "Unlike traditional single-agent setups, CrewAI emphasizes collaboration and task delegation, similar to how human teams operate.",
+          "source_url": "https://www.digitalocean.com/community/tutorials/crewai-crash-course-role-based-agent-orchestration"
+        },
+        {
+          "extracted_text": "CrewAI Vs AutoGen Vs LangGraph The table below highlights the key differences between CrewAI, AutoGen, and LangGraph across important technical and practical dimensions.",
+          "source_url": "https://datamites.com/blog/crewai-vs-autogen-vs-langgraph-top-multi-agent-frameworks/?srsltid=AfmBOoo-T1ircKMuwhEfFJshVcj99oAFMuYZaz3vCjYEsuax86IOj0CE"
+        },
+        {
+          "extracted_text": "CrewAI transforms a set of AI agents into crew of AI agents that collaborate via context sharing and delegation to perform complex tasks.",
+          "source_url": "https://www.crewai.com/open-source"
+        },
+        {
+          "extracted_text": "CrewAI unlocks the true potential of multi-agent automation, delivering the best-in-class combination of speed, flexibility, and control with either Crews of AI Agents or Flows of Events: Standalone Framework: Built from scratch, independent of LangChain or any other agent framework.",
+          "source_url": "https://github.com/crewAIInc/crewAI"
+        },
+        {
+          "extracted_text": "Agents and Tasks Token count Hello, I was wondering if the combination of an agent alongside his associated task being roughly 500 tokens if is too much, considering costs optimizations and performance.",
+          "source_url": "https://community.crewai.com/t/agents-and-tasks-token-count/4384"
+        }
+      ],
+      "original_prose": "In 2026, developers orchestrating multiple Claude Code agents face a choice among several multi-agent frameworks, notably tmux dispatchers, LangGraph, and CrewAI. Among these, CrewAI stands out for its role-based architecture that assigns explicit roles such as Researcher, Writer, and Manager to agents, enabling clear task decomposition and scalable collaboration through shared contextual memory and inter-agent communication [7][22]. Unlike traditional single-agent setups or simpler dispatchers like tmux, CrewAI supports both sequential and hierarchical workflow modes, where a manager agent can dynamically order or generate tasks, reflecting a more human-like team orchestration model [3][24]. This design facilitates handling complex workflows with minimal setup, a key factor in its rapid adoption, evidenced by over 32,000 GitHub stars, nearly 1 million monthly downloads, and more than 150 enterprise customers by mid-2025 [1][2][13].\n\nPerformance metrics further highlight CrewAI\u2019s advantages over alternatives like LangGraph. Benchmarks indicate CrewAI can execute structured tasks up to approximately 5.76 times faster than LangGraph, reflecting superior efficiency in latency-sensitive environments [8]. Token consumption per task in CrewAI typically hovers around 500 tokens per agent-task pair, balancing cost and performance considerations effectively [28]. Moreover, CrewAI emphasizes production readiness through robust observability and cost optimization features, including token and latency tracking, failure alerts, and integration with monitoring backends such as Langfuse and Datadog [19][20][23]. These capabilities contrast with LangGraph\u2019s more complex feature set, which may suit highly sophisticated applications but often at the expense of simplicity and speed [15][25].\n\nCrewAI\u2019s architecture is Python-native, asynchronous, and composable, designed from the ground up to maintain stability at scale, a critical advantage over many frameworks that falter under real-world complexity [4][27]. Its modular logic and ease of setup reportedly enable immediate effectiveness, which has driven adoption by over 60% of Fortune 500 companies, including major enterprises like PwC, IBM, and NVIDIA [6][11][5]. The framework\u2019s open-source nature and active community further support continuous improvement and integration flexibility, although developers must still implement external service integrations such as Google Calendar authentication themselves [10][21]. Overall, CrewAI\u2019s combination of speed, flexibility, and control positions it as a leading solution for orchestrating Claude Code agents in 2026, especially where reliability, observability, and cost efficiency are paramount [9][26].",
+      "original_citation_rate": 0.821
+    },
+    {
+      "theme": "Latency and Token Metrics Across Frameworks",
+      "facts": [
+        {
+          "extracted_text": "Claude 4.5 Sonnet, with a first-token latency of 2 seconds and a per-token latency of 0.030 seconds, shows moderate initial responsiveness.",
+          "source_url": "https://research.aimultiple.com/llm-latency-benchmark/"
+        },
+        {
+          "extracted_text": "This combination allows GPT-5.2 to quickly catch up after a slightly slower start, making it highly efficient at handling longer or more complex coding tasks where sustained token-generation speed matters. Claude 4.5 Sonnet, with a first-token latency of 2 seconds and a per-token latency of 0.028 seconds, demonstrated moderate responsiveness.",
+          "source_url": "https://research.aimultiple.com/llm-latency-benchmark/"
+        },
+        {
+          "extracted_text": "Performance scales with workflow complexity and number of nodes. Suitable for most agent framework applications with typical response times of 100-500ms for simple flows and 1-5 seconds for complex multi-step agent operations.",
+          "source_url": "https://www.index.dev/skill-vs-skill/ai-langgraph-vs-n8n-vs-flowise"
+        },
+        {
+          "extracted_text": "Latency has emerged as second biggest challenge (20%). As agents move into customer-facing use cases like customer service and code generation, response time becomes a critical part of the user experience.",
+          "source_url": "https://www.langchain.com/state-of-agent-engineering"
+        },
+        {
+          "extracted_text": "Performance overhead from abstraction layers can create latency issues at scale, particularly problematic for real-time agent applications requiring sub-second response times.",
+          "source_url": "https://www.index.dev/skill-vs-skill/ai-langgraph-vs-n8n-vs-flowise"
+        }
+      ],
+      "original_prose": "Latency remains a critical factor in the orchestration of multiple Claude Code agents, especially as these systems are increasingly deployed in customer-facing scenarios where responsiveness directly impacts user experience. Among the frameworks evaluated\u2014tmux dispatchers, LangGraph, and CrewAI\u2014differences in latency and token throughput reveal important trade-offs. Claude 4.5 Sonnet, for example, exhibits a first-token latency of approximately 2 seconds and a per-token latency near 0.028-0.030 seconds, indicating moderate initial responsiveness but a steady token generation pace thereafter[1][2]. This latency profile suggests that while Claude 4.5 Sonnet may not be the fastest to start, it maintains consistent throughput, which is advantageous for longer or more complex coding tasks where sustained token generation is critical[2].\n\nIn contrast, frameworks like LangGraph and CrewAI, which often involve more complex multi-agent workflows, experience latency that scales with the complexity and number of nodes involved. Typical response times range from 100 to 500 milliseconds for simple flows, but can extend to 1-5 seconds for more elaborate multi-step operations[3]. This variability underscores the challenge of balancing orchestration complexity with real-time responsiveness. Moreover, the performance overhead introduced by abstraction layers in these frameworks can exacerbate latency issues, particularly at scale, making sub-second response times difficult to achieve in real-time applications[5]. This overhead is a significant consideration when deploying agents in latency-sensitive environments such as live coding assistance or interactive customer support.\n\nThe importance of minimizing latency is further highlighted by industry reports identifying it as the second biggest challenge for agent deployment, affecting 20% of use cases[4]. As developers orchestrate multiple Claude Code agents in 2026, the choice between tmux dispatchers, LangGraph, and CrewAI will likely hinge on the specific latency and token throughput requirements of their applications. While tmux dispatchers may offer lower abstraction overhead and thus reduced latency, LangGraph and CrewAI provide more sophisticated orchestration capabilities at the cost of increased response times. Ultimately, optimizing these trade-offs will be essential to delivering seamless, efficient multi-agent workflows in production environments.",
+      "original_citation_rate": 1.0
+    }
+  ]
+}

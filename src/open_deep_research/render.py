@@ -151,7 +151,7 @@ def report_to_dict(report: HybridReport, excluded_facts: Optional[List[Extractio
             all_footnotes.append(fact_dict)
             global_id += 1
 
-    return {
+    result = {
         "title": report.title,
         "executive_summary": report.executive_summary,
         "sections": sections,
@@ -165,6 +165,12 @@ def report_to_dict(report: HybridReport, excluded_facts: Optional[List[Extractio
             "themes": len(report.sections),
         },
     }
+
+    # Include checkpoints if available (for fixture extraction)
+    if hasattr(report, 'checkpoints') and report.checkpoints:
+        result["checkpoints"] = report.checkpoints
+
+    return result
 
 
 # =============================================================================

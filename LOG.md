@@ -1868,3 +1868,63 @@ Changes:
 | `src/open_deep_research/render.py` | Fixed grid columns, visibility hidden H2, removed unverified styling |
 | `STATE.md` | Updated status |
 
+
+---
+
+## 2026-01-12: Pipeline Checkpoints + Fixture Extraction
+
+### Summary
+
+Added pipeline checkpoints to capture intermediate states for component-level fixture extraction. All 4 checkpoints (pre_dedup, post_dedup, pre_arrangement, post_arrangement) now captured during pipeline runs.
+
+### Checkpoints Added to pipeline_v2.py
+
+| Checkpoint | Location | Contents |
+|------------|----------|----------|
+| pre_dedup | After extraction | All verified facts before dedup |
+| post_dedup | After LLM + cross-batch dedup | Remaining facts + dedup count |
+| pre_arrangement | After cleanup | Facts ready for theme grouping |
+| post_arrangement | After arrangement | Theme groupings + excluded facts |
+
+### Helper Function
+
+Added `serialize_extraction()` to convert Extraction objects to dicts for JSON storage.
+
+### Verification Run
+
+Query: Claude Code multi-agent orchestration (from existing run_state)
+- Sources: 5 (limited for rate limit management)
+- pre_dedup: 23 facts
+- post_dedup: 14 facts (9 removed)
+- pre_arrangement: 14 facts
+- post_arrangement: 10 grouped, 4 excluded, 3 themes
+
+### Files Changed
+
+| File | Changes |
+|------|---------|
+| `src/open_deep_research/pipeline_v2.py` | Added checkpoints dict, serialize_extraction(), checkpoint captures |
+| `src/open_deep_research/render.py` | report_to_dict() now includes checkpoints |
+| `scripts/extract_fixtures.py` | Updated to use hybrid_report.checkpoints |
+| `scripts/run_pipeline_standalone.py` | NEW - Standalone runner bypassing graph dependencies |
+
+### Outputs
+
+- `run_state_1768271018.json` - Full run with checkpoints
+- `report_1768271018.html` - Rendered report
+- `tests/fixtures/synthesis/*.json` - Synthesis fixtures
+- `tests/fixtures/extraction/*.json` - Extraction fixtures
+- `tests/fixtures/dedup/*.json` - Dedup fixtures
+- `tests/fixtures/arrangement/*.json` - Arrangement fixtures
+- `tests/fixtures/sources/*.json` - Source authority fixtures
+
+### Fixture Counts After Extraction
+
+| Directory | Count | Limit |
+|-----------|-------|-------|
+| gold_queries | 8 | 10 |
+| extraction | 2 | 20 |
+| dedup | 1 | 15 |
+| synthesis | 3 | 20 |
+| arrangement | 1 | 15 |
+| sources | 2 | 10 |

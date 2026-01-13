@@ -8,6 +8,7 @@ Usage:
     python scripts/prompt_sandbox.py                    # Single run, latest fixture
     python scripts/prompt_sandbox.py voice_agent_eval   # Use specific fixture
     python scripts/prompt_sandbox.py --loop             # Continuous iteration mode
+    python scripts/prompt_sandbox.py --fixture tests/fixtures/extraction/sample.json
 """
 
 import asyncio
@@ -179,22 +180,28 @@ async def run_extraction_sandbox(sources: dict, topic: str, llm_call) -> list[st
 # MAIN SANDBOX
 # =============================================================================
 
-async def run_sandbox(fixture_name: str = None, loop_mode: bool = False):
+async def run_sandbox(fixture_name: str = None, fixture_path: str = None, loop_mode: bool = False):
     """Run the prompt sandbox."""
 
-    # Load fixture
-    fixture_dir = project_root / "tests/fixtures/gold_queries"
-    if fixture_name:
-        fixture_path = fixture_dir / f"{fixture_name}.json"
+    # Load fixture - priority: fixture_path > fixture_name > latest
+    if fixture_path:
+        fixture_file = Path(fixture_path)
+        if not fixture_file.exists():
+            print(f"Error: {fixture_path} not found")
+            return False
     else:
-        fixtures = sorted(fixture_dir.glob("*.json"), key=lambda p: p.stat().st_mtime, reverse=True)
-        if not fixtures:
-            print("No fixtures found. Run a test first to create one.")
-            return
-        fixture_path = fixtures[0]
+        fixture_dir = project_root / "tests/fixtures/gold_queries"
+        if fixture_name:
+            fixture_file = fixture_dir / f"{fixture_name}.json"
+        else:
+            fixtures = sorted(fixture_dir.glob("*.json"), key=lambda p: p.stat().st_mtime, reverse=True)
+            if not fixtures:
+                print("No fixtures found. Run a test first to create one.")
+                return False
+            fixture_file = fixtures[0]
 
-    print(f"Loading: {fixture_path.name}")
-    with open(fixture_path) as f:
+    print(f"Loading: {fixture_file.name}")
+    with open(fixture_file) as f:
         fixture = json.load(f)
 
     query = fixture.get("query", "Research topic")
@@ -256,7 +263,7 @@ async def run_sandbox(fixture_name: str = None, loop_mode: bool = False):
     log_path = project_root / "sandbox_iterations.jsonl"
     log_entry = {
         "timestamp": datetime.now().isoformat(),
-        "fixture": fixture_path.name,
+        "fixture": fixture_file.name,
         "sources": len(sources),
         "scores": scores,
         "passed": passed,
@@ -289,12 +296,19 @@ async def run_sandbox(fixture_name: str = None, loop_mode: bool = False):
 
 
 def main():
-    args = sys.argv[1:]
-    loop_mode = "--loop" in args
-    args = [a for a in args if not a.startswith("-")]
-    fixture_name = args[0] if args else None
+    import argparse
+    parser = argparse.ArgumentParser(description="Prompt iteration sandbox")
+    parser.add_argument("fixture_name", nargs="?", help="Fixture name (without .json)")
+    parser.add_argument("--fixture", "-f", help="Path to specific fixture file")
+    parser.add_argument("--loop", action="store_true", help="Continuous iteration mode")
 
-    passed = asyncio.run(run_sandbox(fixture_name, loop_mode))
+    args = parser.parse_args()
+
+    passed = asyncio.run(run_sandbox(
+        fixture_name=args.fixture_name,
+        fixture_path=args.fixture,
+        loop_mode=args.loop
+    ))
     sys.exit(0 if passed else 1)
 
 

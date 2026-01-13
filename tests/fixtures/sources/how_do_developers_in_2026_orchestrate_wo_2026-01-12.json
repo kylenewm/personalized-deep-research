@@ -1,0 +1,36 @@
+{
+  "_meta": {
+    "tier": "extended",
+    "created": "2026-01-12",
+    "last_used": null,
+    "purpose": "source authority testing",
+    "passing": null,
+    "extracted_from": "run_state_1768263187.json"
+  },
+  "query": "How do developers in 2026 orchestrate workflows involving multiple Claude Code agents, specifically ",
+  "total_facts": 62,
+  "unique_domains": 21,
+  "domain_distribution": {
+    "digitalocean.com": 8,
+    "github.com": 7,
+    "index.dev": 7,
+    "datamites.com": 6,
+    "towardsdatascience.com": 4,
+    "insightpartners.com": 4,
+    "aws.amazon.com": 3,
+    "crewai.com": 3,
+    "lobehub.com": 2,
+    "medium.com": 2,
+    "datacamp.com": 2,
+    "developer.nvidia.com": 2,
+    "docs.langchain.com": 2,
+    "datascientest.com": 2,
+    "research.aimultiple.com": 2,
+    "jannesklaas.github.io": 1,
+    "grokkingtechcareer.substack.com": 1,
+    "composio.dev": 1,
+    "secondtalent.com": 1,
+    "community.crewai.com": 1,
+    "langchain.com": 1
+  }
+}

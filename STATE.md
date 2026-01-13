@@ -435,6 +435,35 @@ Fix confirmed working. Remaining uncited rate issue is synthesis-related (separa
 
 **Note:** Need full pipeline run to verify improvement on real queries.
 
+## Eval Audit (2026-01-12)
+
+**Full audit saved to:** `EVAL_AUDIT_2026-01-12.md`
+
+### What's Passing (GREEN)
+- fact_quality: 4.33 (target ≥3.5)
+- theme_coverage: 4.20 (target ≥3.5)
+- duplicate_rate: 0% (target ≤15%)
+- citation_accuracy: 4.80 (target ≥4.0)
+- synthesis_quality: 4.40 (target ≥3.5)
+
+### What's Close (YELLOW)
+- match_score: 0.76 (target ≥0.80)
+- uncited_rate: 7.7% (target ≤5%)
+
+### What's Missing (RED - No Eval)
+| Gap | Why It Matters |
+|-----|----------------|
+| Citation correctness | We check if `[3]` appears, not if it's accurate |
+| Source authority | Prompt hint only, not measured |
+| Query answering | Does report answer original question? |
+
+### Key Finding
+`citation_sandbox.py` and `resynthesis_test.py` measure wrong metric:
+- They measure: "Did all input facts get used?"
+- Should measure: "Are citations in output correct?"
+
+We have more facts than needed. Low fact usage is fine. Citation *accuracy* matters.
+
 ## Next Steps
 
 1. ~~**Fix duplicate leak**~~ ✅ DONE - Cross-batch dedup added
@@ -443,9 +472,11 @@ Fix confirmed working. Remaining uncited rate issue is synthesis-related (separa
 4. ~~**Add showcase to README**~~ ✅ DONE - agentic_coding_2026 example
 5. ~~**Debug low match_score issue**~~ ✅ FIXED - Table artifact rejection (0.63 → 0.76)
 6. ~~**Strengthen synthesis prompt**~~ ✅ DONE - 90% target, GOOD/BAD examples
-7. **Run full pipeline to verify synthesis improvement** - Need new run to measure real impact
-8. **Add source scoring** - Domain authority tier (official > papers > news > blogs)
-9. **Apply overnight agent findings** - Implement compaction, maxTurns, structured memory
+7. ~~**Eval audit**~~ ✅ DONE - See EVAL_AUDIT_2026-01-12.md
+8. ~~**Add citation accuracy to resynthesis_test.py**~~ ✅ DONE - LLM-based accuracy check (96% on test fixture)
+9. **Run full pipeline to verify synthesis improvement** - Need new run to measure real impact
+10. **Add source authority distribution** - Count domain tiers in facts
+11. **Apply overnight agent findings** - Implement compaction, maxTurns, structured memory
 
 ## Already Tried (Don't Repeat)
 
@@ -460,6 +491,82 @@ Fix confirmed working. Remaining uncited rate issue is synthesis-related (separa
 | JSON output from synthesis | Leaked artifacts | LLM outputs JSON structure in prose |
 | Regex cleanup of JSON | Fragile | Whack-a-mole, won't scale |
 
+## Test Data Architecture (2026-01-12)
+
+### What Was Built
+
+Component-level test infrastructure for iterating on individual pipeline stages without full runs:
+
+| Script | Purpose |
+|--------|---------|
+| `scripts/extract_fixtures.py` | Extract component-specific fixtures from run_state |
+| `scripts/run_all_sandboxes.py` | Unified sandbox runner with core/full modes |
+| `scripts/prune_fixtures.py` | Fixture maintenance (stale detection, promotion) |
+
+### Fixture Directories
+
+```
+tests/fixtures/
+├── extraction/          # For prompt_sandbox.py
+├── synthesis/           # For resynthesis_test.py
+├── dedup/               # For dedup_sandbox.py
+├── arrangement/         # For arrangement_sandbox.py
+├── sources/             # For source authority analysis
+└── gold_queries/        # Full pipeline output for eval
+```
+
+### Features
+
+- **Hard limits** per directory (10-20 fixtures max)
+- **Core vs Extended** tiers - core always runs, extended optional
+- **Fixture metadata** - `_meta.tier`, `_meta.last_used`, `_meta.created`
+- **Source authority** - `--analyze` flag on resynthesis_test.py shows tier distribution
+
+### Usage
+
+```bash
+# Extract fixtures from run_state
+python scripts/extract_fixtures.py run_state_*.json --all
+
+# Run all sandboxes (core fixtures only)
+python scripts/run_all_sandboxes.py
+
+# Run all sandboxes (all fixtures)
+python scripts/run_all_sandboxes.py --full
+
+# Check fixture health
+python scripts/prune_fixtures.py --summary
+
+# Promote fixture to core
+python scripts/prune_fixtures.py --promote path/to/fixture.json
+```
+
+### Pipeline Checkpoints (DONE 2026-01-12)
+
+All checkpoints now captured in `hybrid_report.checkpoints`:
+
+| Checkpoint | Status | Contents |
+|------------|--------|----------|
+| pre_dedup | ✅ Done | All verified facts before dedup |
+| post_dedup | ✅ Done | Facts after LLM + cross-batch dedup |
+| pre_arrangement | ✅ Done | Facts after cleanup, before themes |
+| post_arrangement | ✅ Done | Theme groupings with fact assignments |
+
+**Files modified:**
+- `src/open_deep_research/pipeline_v2.py` - Checkpoint captures in `run_pipeline_v2()`
+- `src/open_deep_research/render.py` - `report_to_dict()` includes checkpoints
+- `scripts/extract_fixtures.py` - Uses checkpoints for dedup/arrangement fixtures
+
+**Verified (2026-01-12):**
+- Ran pipeline with 5 sources from Claude Code orchestration query
+- All 4 checkpoints captured successfully:
+  - pre_dedup: 23 facts
+  - post_dedup: 14 facts (9 removed)
+  - pre_arrangement: 14 facts
+  - post_arrangement: 10 grouped, 4 excluded (3 themes)
+- Extracted all 5 fixture types from `run_state_1768271018.json`
+- Saved: `report_1768271018.html` and fixtures in `tests/fixtures/`
+
 ## Last Updated
 
-2026-01-12 — Strengthened synthesis prompt with explicit GOOD/BAD examples and 90% citation target. Fixed citation_sandbox parsing. Need full pipeline run to verify improvement.
+2026-01-12 — Verified pipeline checkpoints work end-to-end. All 4 checkpoints captured, 5 fixture types extracted successfully.

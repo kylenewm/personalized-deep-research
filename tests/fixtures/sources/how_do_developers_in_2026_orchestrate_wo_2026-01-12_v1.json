@@ -1,0 +1,18 @@
+{
+  "_meta": {
+    "tier": "extended",
+    "created": "2026-01-12",
+    "last_used": null,
+    "purpose": "source authority testing",
+    "passing": null,
+    "extracted_from": "run_state_1768271018.json"
+  },
+  "query": "How do developers in 2026 orchestrate workflows involving multiple Claude Code agents, specifically comparing the approaches and performance of tmux dispatchers, LangGraph, and CrewAI? In my research, I want to examine and compare these three orchestration patterns in terms of: 1) their architectural differences, 2) how they manage and coordinate multiple agents, and 3) quantitative performance metrics such as average tokens processed per task and task latency. If possible, I would like to refer",
+  "total_facts": 10,
+  "unique_domains": 3,
+  "domain_distribution": {
+    "github.com": 4,
+    "dev.to": 4,
+    "lobehub.com": 2
+  }
+}

@@ -104,6 +104,10 @@ class HybridReport:
     # Facts excluded from themes but still valid sources
     excluded_facts: List[Extraction] = field(default_factory=list)
 
+    # Pipeline checkpoints for fixture extraction
+    checkpoints: dict = field(default_factory=dict)
+    # Contains: pre_dedup, post_dedup, pre_arrangement, post_arrangement
+
     @property
     def verified_count(self) -> int:
         return sum(len(s.facts) for s in self.sections)
@@ -1365,6 +1369,20 @@ async def run_pipeline_v2(
     if not verified:
         raise ValueError("No verified extractions - cannot generate report")
 
+    # Checkpoint: pre_dedup - facts before deduplication
+    def serialize_extraction(e):
+        """Serialize extraction for checkpoint storage."""
+        return {
+            "extracted_text": e.extracted_text,
+            "source_url": getattr(e, 'source_url', getattr(e.pointer, 'context', '') if e.pointer else ''),
+            "match_score": getattr(e, 'match_score', 0.0),
+        }
+
+    checkpoints = {
+        "pre_dedup": [serialize_extraction(e) for e in verified],
+        "pre_dedup_count": len(verified),
+    }
+
     # Deduplication: LLM identifies semantic duplicates (within-batch)
     progress("DEDUP", f"Deduplicating {len(verified)} facts (LLM semantic matching)...")
     deduped = await deduplicate_extractions_llm(verified, llm_call)
@@ -1384,6 +1402,11 @@ async def run_pipeline_v2(
     if not verified:
         raise ValueError("No facts remaining after deduplication")
 
+    # Checkpoint: post_dedup - facts after deduplication
+    checkpoints["post_dedup"] = [serialize_extraction(e) for e in verified]
+    checkpoints["post_dedup_count"] = len(verified)
+    checkpoints["dedup_removed"] = checkpoints["pre_dedup_count"] - len(verified)
+
     # Cleanup: LLM points to garbage, code removes it
     progress("CLEANUP", f"Cleaning {len(verified)} facts (LLM points, code removes)...")
     cleaned = await cleanup_extractions(verified, llm_call)
@@ -1393,12 +1416,31 @@ async def run_pipeline_v2(
     if not verified:
         raise ValueError("No facts remaining after cleanup")
 
+    # Checkpoint: pre_arrangement - facts before theme grouping
+    checkpoints["pre_arrangement"] = [serialize_extraction(e) for e in verified]
+    checkpoints["pre_arrangement_count"] = len(verified)
+
     # Stage 2: Arrange and curate
     progress("ARRANGE", f"Grouping {len(verified)} facts by theme...")
     curated = await arrange_facts(verified, topic, llm_call, prefer_authoritative_sources)
 
     total_grouped = sum(len(g.fact_ids) for g in curated.groups)
     progress("ARRANGE", f"Created {len(curated.groups)} themes, {total_grouped} facts kept, {len(curated.excluded_ids)} excluded")
+
+    # Checkpoint: post_arrangement - theme grouping results
+    checkpoints["post_arrangement"] = {
+        "themes": [
+            {
+                "theme": g.theme,
+                "fact_ids": g.fact_ids,
+                "facts": [serialize_extraction(verified[i]) for i in g.fact_ids if i < len(verified)]
+            }
+            for g in curated.groups
+        ],
+        "excluded_ids": curated.excluded_ids,
+        "excluded_count": len(curated.excluded_ids),
+        "grouped_count": total_grouped,
+    }
 
     # Build list of excluded facts (for Sources & Evidence section)
     excluded_id_set = set(curated.excluded_ids)
@@ -1426,5 +1468,8 @@ async def run_pipeline_v2(
 
     # Attach excluded facts for Sources & Evidence section
     report.excluded_facts = excluded_facts
+
+    # Attach checkpoints for fixture extraction
+    report.checkpoints = checkpoints
 
     return report
