@@ -54,10 +54,13 @@ async def run_from_sources(sources: dict, query: str):
     print("=" * 60)
 
     start = time.time()
+    # Generate title from query (first 100 chars, truncate at word boundary)
+    title = query[:100].rsplit(' ', 1)[0] if len(query) > 100 else query
+
     report = await run_pipeline_v2(
         sources=sources,
         topic=query,
-        title="Research Report",
+        title=title,
         llm_call=llm_call,
         on_progress=on_progress
     )

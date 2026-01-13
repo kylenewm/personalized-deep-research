@@ -3,7 +3,9 @@
 This document provides a complete technical breakdown of how the Deep Research agent works, from user query to final verified report.
 
 **Related docs:**
-- `EXECUTION_TRACE.md` — Step-by-step trace with exact prompts and file:line references (for debugging/modifying)
+- `MODULES.md` — Complete inventory of every file in the project
+- `FLOWS.md` — Detailed execution traces for all major paths
+- `EXECUTION_TRACE.md` — Step-by-step trace with exact prompts and file:line references
 - `STATE.md` — Current status, decisions, and development sandbox
 - `scripts/sandbox_pipeline.py` — Fast iteration on Pipeline v2 without re-running research
 
@@ -613,11 +615,11 @@ class ResearcherState(TypedDict):
 
 | Setting | Default | Description |
 |---------|---------|-------------|
-| `use_council` | true | Enable brief validation |
+| `use_council` | **false** | Enable brief validation (costs ~$0.08/run) |
 | `council_models` | [gpt-4.1, claude-sonnet] | Models for council |
 | `council_min_consensus` | 0.7 | Approval threshold |
 | `council_max_revisions` | 3 | Max revision attempts |
-| `use_findings_council` | true | Enable findings fact-check |
+| `use_findings_council` | **false** | Enable findings fact-check (costs ~$0.08/run) |
 
 ### Verification Settings
 
@@ -625,7 +627,15 @@ class ResearcherState(TypedDict):
 |---------|---------|-------------|
 | `use_claim_verification` | false | Post-report claim check |
 | `use_tavily_extract` | true | Use Extract API for cleaner content |
-| `enable_brief_context` | true | Pre-search for brief context |
+| `enable_brief_context` | **false** | Pre-search for brief context (costs ~$0.02/run) |
+
+### Safeguarded Generation Settings
+
+| Setting | Default | Description |
+|---------|---------|-------------|
+| `use_safeguarded_generation` | true | Use Pipeline v2 (recommended) |
+| `safeguarded_batch_size` | 12 | Sources per extraction batch |
+| `safeguarded_min_score` | 0.4 | Minimum match score for verification |
 
 ---
 
@@ -701,12 +711,28 @@ Another verified fact...
 </div>
 ```
 
-### Deduplication
+### Deduplication (Two-Stage)
 
-Two-pass deduplication prevents repetition:
+**Stage 1: LLM Semantic Dedup**
+- LLM identifies semantically duplicate facts
+- Protects different numbers: "200ms" vs "180ms" are NOT duplicates
+- Catches paraphrases: "under 500ms" vs "below 500 milliseconds" ARE duplicates
+- 0% false positive rate (vs 55% with Jaccard)
 
-1. **Per-source:** Max 1 extraction per source URL
-2. **Cross-source:** Jaccard similarity > 0.4 = duplicate
+**Stage 2: Cross-Batch Text Similarity**
+- Catches duplicates that leak across extraction batches
+- Uses Jaccard similarity with number protection
+- If both texts have numbers and they differ → not duplicate
+
+### Pipeline Checkpoints
+
+All stages captured in `hybrid_report.checkpoints`:
+- `pre_dedup` — All facts before dedup
+- `post_dedup` — After LLM + cross-batch dedup
+- `pre_arrangement` — After cleanup, before themes
+- `post_arrangement` — Theme groupings with excluded IDs
+
+Used by `scripts/extract_fixtures.py` to create component test data.
 
 ### Quality Filter
 
@@ -829,6 +855,66 @@ Every single claim MUST have a citation.
 | `scripts/test_research.py` | Test research phase (~2-3 min) |
 | `scripts/test_report.py` | Test report generation (~30s) |
 | `scripts/staged_config.py` | Shared minimal config |
+
+---
+
+## Evaluation Framework
+
+Standalone eval system for quality assessment (`eval/` and `scripts/run_eval.py`).
+
+### Three Evaluation Types
+
+| Type | What it measures | Target |
+|------|------------------|--------|
+| **Brief Eval** | Query→brief preservation | ≥4/5 |
+| **Upstream Eval** | Fact quality, theme coverage, dedup rate | ≥3.5/5, ≤15% dup |
+| **Downstream Eval** | Citation accuracy, synthesis quality, uncited rate | ≥4/5, ≤5% uncited |
+
+### Running Eval
+
+```bash
+# Mini mode (15 facts, ~$0.05)
+python scripts/run_eval.py dataset.json --mode mini
+
+# Medium mode (50 facts, ~$0.10)
+python scripts/run_eval.py dataset.json --mode medium
+
+# Full mode (all facts, ~$0.30)
+python scripts/run_eval.py dataset.json
+```
+
+### Eval Output
+
+```
+BRIEF (GOOD):
+  Preservation:  5.0/5
+  Dilution:      5.0/5
+
+UPSTREAM (PASS):
+  Fact quality:    3.90
+  Duplicate rate:  4.0%
+  Match score:     0.79
+
+DOWNSTREAM (WARN):
+  Citation accuracy: 4.90
+  Uncited rate:      5.9%
+
+OVERALL: WARN
+```
+
+### Sandboxes
+
+Component-level quality tests:
+
+| Sandbox | Tests | Key Metric |
+|---------|-------|------------|
+| `prompt_sandbox.py` | Extraction quality | Avg words, artifacts |
+| `dedup_sandbox.py` | Dedup accuracy | FP rate, recall |
+| `arrangement_sandbox.py` | Theme grouping | Exclusion rate |
+| `citation_sandbox.py` | Citation rate | % facts cited |
+| `quality_sandbox.py` | Source quality | Per-domain limits |
+
+Run all: `python scripts/run_all_sandboxes.py`
 
 ---
 

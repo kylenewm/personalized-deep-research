@@ -67,6 +67,7 @@ test_report_output.md
 # Generated HTML/PDF reports
 *.html
 !templates/*.html
+!examples/*.html
 report_*.md
 *_report.md
 *_report.html
@@ -109,3 +110,8 @@ metrics/
 
 # Eval output files
 eval_*.json
+EVAL_AUDIT*.md
+EVAL_DASHBOARD*.html
+
+# Archived docs (historical planning docs)
+docs/archive/
