@@ -115,3 +115,16 @@ EVAL_DASHBOARD*.html
 
 # Archived docs (historical planning docs)
 docs/archive/
+
+# Large test fixtures
+tests/integration/fixtures/*.json
+
+# Trace/audit files (temporary debugging output)
+EXECUTION_TRACE.md
+PIPELINE_TRACE.md
+QUALITY_AUDIT.md
+AUDIT_REPORT.md
+
+# Working state files
+STATE.md
+LOG.md

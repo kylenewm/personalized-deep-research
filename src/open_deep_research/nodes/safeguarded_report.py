@@ -125,12 +125,15 @@ async def safeguarded_report_generation(state: AgentState, config: RunnableConfi
     def on_progress(stage: str, msg: str):
         print(f"[SAFEGUARDED:{stage}] {msg}")
 
+    # Generate title from topic (truncate if too long)
+    title = topic[:100] + "..." if len(topic) > 100 else topic
+
     try:
         # Run the three-stage pipeline
         report = await run_pipeline_v2(
             sources=sources_dict,
             topic=topic,
-            title="Research Report",
+            title=title,
             llm_call=llm_call,
             batch_size=batch_size,
             min_score=min_score,

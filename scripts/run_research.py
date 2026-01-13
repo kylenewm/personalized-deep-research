@@ -76,7 +76,8 @@ async def run_research(query: str, max_sources: int = 75):
     fixture = {
         "query": query,
         "research_brief": brief,
-        "sources": sources,
+        "source_store": sources,
+        "hybrid_report": result.get("hybrid_report", {}),
         "captured_at": datetime.now().isoformat()
     }
 
