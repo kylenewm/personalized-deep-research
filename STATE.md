@@ -399,14 +399,25 @@ Added example output to README from `agentic_coding_2026.json` gold dataset:
 - Upstream: PASS (4.33 quality, 0% duplicates)
 - Downstream: WARN (6.4% uncited vs 5% target)
 
-## Debugging Run: claude_code_orch_2026_low_verify.json
+## Table Artifact Fix (2026-01-12)
 
-Ran Claude Code orchestration query but got poor verification:
-- 43 facts, avg match_score **0.63** (target ≥0.8)
-- 37 of 43 facts had match_score < 0.8
-- Uncited rate 33.8% (FAIL)
+**Problem:** claude_code_orch run had 0.63 avg match_score (target ≥0.8) with 37/43 facts containing table artifacts.
 
-**Root cause:** Extraction quality issue - facts not well-verified against source text. Saved for debugging extraction/verification logic.
+**Root cause:** Markdown table rows (`| cell | cell |`) were being extracted as facts because the pipe threshold was `>3` (allowed 3 pipes through).
+
+**Fix:** `pointer_extract.py` changes:
+- Lowered pipe threshold from `>3` to `>=2` in `is_quality_extraction`
+- Added early table row rejection in `find_best_match` (before cleaning)
+- Added pipe stripping to `clean_extracted_text`
+
+**Verification (re-run):**
+| Metric | Before Fix | After Fix | Good Dataset |
+|--------|------------|-----------|--------------|
+| Table artifacts | 37/43 | **0/62** | 0/73 |
+| Avg match score | 0.63 | **0.76** | 0.76 |
+| Uncited rate | 33.8% | 27% | 6.4% |
+
+Fix confirmed working. Remaining uncited rate issue is synthesis-related (separate from extraction).
 
 ## Next Steps
 
@@ -414,9 +425,10 @@ Ran Claude Code orchestration query but got poor verification:
 2. ~~**Build eval framework**~~ ✅ DONE - upstream + downstream + brief evals
 3. ~~**Preserve query specificity**~~ ✅ NOT NEEDED - brief eval shows 5/5 preservation
 4. ~~**Add showcase to README**~~ ✅ DONE - agentic_coding_2026 example
-5. **Debug low match_score issue** - Why claude_code_orch run had 0.63 avg match_score
-6. **Add source scoring** - Domain authority tier (official > papers > news > blogs)
-7. **Apply overnight agent findings** - Implement compaction, maxTurns, structured memory
+5. ~~**Debug low match_score issue**~~ ✅ FIXED - Table artifact rejection (0.63 → 0.76)
+6. **Investigate high uncited rate** - Synthesis issue (27% vs 6.4% on similar queries)
+7. **Add source scoring** - Domain authority tier (official > papers > news > blogs)
+8. **Apply overnight agent findings** - Implement compaction, maxTurns, structured memory
 
 ## Already Tried (Don't Repeat)
 
@@ -433,4 +445,4 @@ Ran Claude Code orchestration query but got poor verification:
 
 ## Last Updated
 
-2026-01-12 — Added showcase to README. Discovered extraction verification issue in claude_code_orch run (0.63 avg match_score). Saved debugging dataset.
+2026-01-12 — Fixed table artifact extraction (match_score 0.63 → 0.76). Verified fix with re-run. Remaining issue: high uncited rate in synthesis (27% vs 6.4%).
