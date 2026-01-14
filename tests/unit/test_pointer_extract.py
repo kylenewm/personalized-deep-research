@@ -519,24 +519,28 @@ class TestVerifySpan:
         # The span should contain the extracted text
         assert verify_span(extraction, content)
 
-    def test_invalid_span_returns_false(self):
-        """Extraction with wrong span offsets should fail verification."""
+    def test_text_not_in_source_returns_false(self):
+        """Extraction with text not in source should fail verification."""
         from open_deep_research.pointer_extract import verify_span
 
         content = "The RAND Corporation released a comprehensive security report in October 2025."
         extraction = Extraction(
             pointer=Pointer("src_001", ["RAND", "security"], "Test"),
             status="verified",
-            extracted_text="RAND Corporation released",
+            extracted_text="OpenAI announced new safety measures",  # Not in source
             match_score=0.9,
-            span_start=0,  # Wrong start
-            span_end=10,   # Wrong end - doesn't contain the text
+            span_start=0,
+            span_end=10,
         )
 
         assert not verify_span(extraction, content)
 
-    def test_missing_span_offsets_returns_false(self):
-        """Extraction with unset span offsets should fail verification."""
+    def test_text_exists_regardless_of_span_offsets(self):
+        """Verification passes if text exists in source, even with wrong spans.
+
+        Note: We verify TEXT existence, not POSITION accuracy. This is intentional
+        because position-based matching fails when normalization shifts offsets.
+        """
         from open_deep_research.pointer_extract import verify_span
 
         content = "Some content here."
@@ -545,11 +549,12 @@ class TestVerifySpan:
             status="verified",
             extracted_text="content here",
             match_score=0.9,
-            span_start=-1,  # Unset
-            span_end=-1,    # Unset
+            span_start=-1,  # Wrong span but text exists
+            span_end=-1,
         )
 
-        assert not verify_span(extraction, content)
+        # Text exists in source, so verification should pass
+        assert verify_span(extraction, content)
 
     def test_empty_extracted_text_returns_false(self):
         """Extraction with no text should fail verification."""
@@ -567,18 +572,18 @@ class TestVerifySpan:
 
         assert not verify_span(extraction, content)
 
-    def test_span_beyond_content_returns_false(self):
-        """Extraction with span beyond content length should fail."""
+    def test_fabricated_text_returns_false(self):
+        """Extraction with completely fabricated text should fail."""
         from open_deep_research.pointer_extract import verify_span
 
-        content = "Short."
+        content = "Short content about AI safety."
         extraction = Extraction(
-            pointer=Pointer("src_001", ["short"], "Test"),
+            pointer=Pointer("src_001", ["safety"], "Test"),
             status="verified",
-            extracted_text="Short",
+            extracted_text="This text was completely fabricated by LLM",
             match_score=0.9,
             span_start=0,
-            span_end=1000,  # Beyond content length
+            span_end=50,
         )
 
         assert not verify_span(extraction, content)

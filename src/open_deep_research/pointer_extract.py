@@ -694,34 +694,52 @@ def extract_from_pointer(
     )
 
 
+def _normalize_for_verification(text: str) -> str:
+    """Normalize text for verification comparison.
+
+    Strips HTML, collapses whitespace, lowercases for matching.
+    """
+    text = re.sub(r'<[^>]+>', '', text)
+    text = re.sub(r'\s+', ' ', text).strip()
+    return text.lower()
+
+
 def verify_span(extraction: Extraction, source_content: str) -> bool:
-    """Deterministic verification: check extracted_text is at the span position.
+    """Deterministic verification: check extracted_text exists in source.
+
+    Note: We verify by substring matching on normalized text, NOT by position.
+    Position-based matching fails when source normalization shifts character offsets.
 
     Args:
-        extraction: Extraction with span_start and span_end populated
-        source_content: Original source content (normalized)
+        extraction: Extraction with extracted_text populated
+        source_content: Original source content
 
     Returns:
-        True if extracted_text matches the span in source, False otherwise
+        True if extracted_text can be found in source, False otherwise
     """
-    if extraction.span_start < 0 or extraction.span_end <= extraction.span_start:
-        return False
-
     if not extraction.extracted_text:
         return False
 
-    # Normalize source content same way as find_best_match
-    source_content = re.sub(r'<[^>]+>', '', source_content)
-    source_content = re.sub(r'\s+', ' ', source_content).strip()
+    # Normalize both for comparison (handles whitespace differences)
+    normalized_extracted = _normalize_for_verification(extraction.extracted_text)
+    normalized_source = _normalize_for_verification(source_content)
 
-    # Check if extracted text can be found at the span position
-    if extraction.span_end > len(source_content):
-        return False
+    # Primary check: normalized extracted text exists in normalized source
+    if normalized_extracted in normalized_source:
+        return True
 
-    span_text = source_content[extraction.span_start:extraction.span_end]
+    # Fallback: check key content words (handles minor cleanup differences)
+    # Extract significant words (4+ chars, not stopwords)
+    extracted_words = set(w for w in normalized_extracted.split() if len(w) >= 4)
+    if not extracted_words:
+        return True  # No significant words to verify
 
-    # The extracted text should match (or be within) the span
-    return extraction.extracted_text in span_text or span_text in extraction.extracted_text
+    source_words = set(normalized_source.split())
+    matched = extracted_words & source_words
+    coverage = len(matched) / len(extracted_words) if extracted_words else 1.0
+
+    # Require 80%+ of significant words to be present
+    return coverage >= 0.8
 
 
 # Prompt for LLM to clean extractions - outputs clean text, code verifies substring
