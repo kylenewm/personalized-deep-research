@@ -49,7 +49,8 @@ async def retry_with_backoff(
     max_retries: int = 3,
     base_delay: float = 1.0,
     max_delay: float = 30.0,
-    on_retry: callable = None
+    on_retry: callable = None,
+    timeout: float = 20.0
 ):
     """Retry async function with exponential backoff on rate limit errors.
 
@@ -59,6 +60,7 @@ async def retry_with_backoff(
         base_delay: Initial delay in seconds (doubles each retry)
         max_delay: Maximum delay cap
         on_retry: Optional callback(attempt, delay, error) called before each retry
+        timeout: Timeout per attempt in seconds (default 20s)
 
     Returns:
         Result of func() on success
@@ -70,7 +72,24 @@ async def retry_with_backoff(
 
     for attempt in range(max_retries + 1):
         try:
-            return await func()
+            return await asyncio.wait_for(func(), timeout=timeout)
+        except asyncio.TimeoutError as e:
+            # Timeout errors are retryable
+            if attempt == max_retries:
+                raise TimeoutError(f"LLM call timed out after {timeout}s (all {max_retries} retries exhausted)")
+
+            last_exception = e
+            delay = min(base_delay * (2 ** attempt), max_delay)
+
+            if on_retry:
+                on_retry(attempt + 1, delay, e)
+            else:
+                print(f"[RETRY] Timeout after {timeout}s, waiting {delay:.1f}s (attempt {attempt + 1}/{max_retries})")
+                logger.warning(f"Timeout after {timeout}s, retrying in {delay:.1f}s (attempt {attempt + 1}/{max_retries})")
+
+            await asyncio.sleep(delay)
+            continue
+
         except Exception as e:
             # Check exception type first (most reliable)
             error_type = type(e).__name__.lower()

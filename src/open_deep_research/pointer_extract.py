@@ -344,6 +344,11 @@ def find_tightest_keyword_window(
         return None, -1, -1, list(keyword_positions.keys()), 0.0
 
     start, end, matched = best_window
+
+    # Guard against division by zero if keywords list is empty
+    if not keywords:
+        return None, -1, -1, [], 0.0
+
     coverage_ratio = len(matched) / len(keywords)
 
     return content[start:end], start, end, matched, coverage_ratio

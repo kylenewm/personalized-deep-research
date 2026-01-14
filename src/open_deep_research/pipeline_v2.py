@@ -1285,12 +1285,27 @@ async def assemble_report(
     Returns:
         Complete HybridReport
     """
-    # Generate AI sections in parallel
-    exec_summary, analysis, conclusion = await asyncio.gather(
+    # Generate AI sections in parallel (with exception handling)
+    results = await asyncio.gather(
         generate_executive_summary(sections, topic, llm_call),
         generate_analysis(sections, topic, llm_call),
-        generate_conclusion(sections, topic, llm_call)
+        generate_conclusion(sections, topic, llm_call),
+        return_exceptions=True
     )
+
+    # Handle any failures gracefully - use empty string if section failed
+    exec_summary = results[0] if not isinstance(results[0], Exception) else ""
+    analysis = results[1] if not isinstance(results[1], Exception) else ""
+    conclusion = results[2] if not isinstance(results[2], Exception) else ""
+
+    # Log any failures
+    for i, (name, result) in enumerate([
+        ("executive_summary", results[0]),
+        ("analysis", results[1]),
+        ("conclusion", results[2])
+    ]):
+        if isinstance(result, Exception):
+            print(f"[PIPELINE] Warning: {name} generation failed: {result}")
 
     total_used = sum(len(s.facts) for s in sections)
 
