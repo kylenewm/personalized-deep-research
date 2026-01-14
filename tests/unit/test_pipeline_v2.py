@@ -19,13 +19,21 @@ def load_module(name: str, path: Path):
     spec.loader.exec_module(module)
     return module
 
-# Load pointer_extract first (no dependencies)
+# Load utils first (no dependencies)
+utils = load_module("utils", src_dir / "utils.py")
+sys.modules["open_deep_research.utils"] = utils
+
+# Load pointer_extract (no dependencies)
 pointer_extract = load_module("pointer_extract", src_dir / "pointer_extract.py")
 Pointer = pointer_extract.Pointer
 Extraction = pointer_extract.Extraction
 
 # Patch it into sys.modules so pipeline_v2 can import it
 sys.modules["open_deep_research.pointer_extract"] = pointer_extract
+
+# Load artifacts (depends on pointer_extract for prompt imports)
+artifacts = load_module("artifacts", src_dir / "artifacts.py")
+sys.modules["open_deep_research.artifacts"] = artifacts
 
 # Load pipeline_v2
 pipeline_v2 = load_module("pipeline_v2", src_dir / "pipeline_v2.py")
@@ -259,14 +267,15 @@ class TestFormatThemeFacts:
 
     def test_formats_selected_facts(self, sample_verified_extractions):
         output = format_theme_facts([], [1, 3], sample_verified_extractions)
-        assert "FACT 1 (ID 1)" in output
-        assert "FACT 2 (ID 3)" in output
+        # New format uses [N] for citations
+        assert "[1]" in output
+        assert "[2]" in output
         assert "RAND" in output
         assert "EU AI Act" in output
 
     def test_handles_invalid_ids(self, sample_verified_extractions):
         output = format_theme_facts([], [1, 100], sample_verified_extractions)
-        assert "FACT 1 (ID 1)" in output
+        assert "[1]" in output
         # ID 100 doesn't exist, should be skipped
 
     def test_preserves_order(self, sample_verified_extractions):
@@ -398,10 +407,11 @@ class TestRenderHybridReport:
             total_verified=70,
             total_used=50
         )
-        output = render_hybrid_report(report, use_color=False)
-        assert "Sources processed: 100" in output
-        assert "Verified facts: 70" in output
-        assert "Facts in report: 50" in output
+        # HTML mode includes stats footer
+        output = render_hybrid_report(report, use_color=True)
+        assert "Sources: 100" in output
+        assert "Verified: 70" in output
+        assert "In report: 50" in output
 
     def test_color_mode_styling(self, sample_themed_sections):
         report = HybridReport(
@@ -412,9 +422,10 @@ class TestRenderHybridReport:
             conclusion="Conclusion"
         )
         output = render_hybrid_report(report, use_color=True)
-        assert "style=" in output
-        assert "#dcfce7" in output  # Green for verified
-        assert "#6b7280" in output  # Gray for synthesis
+        # HTML mode uses CSS classes for styling
+        assert 'class="verified-fact"' in output
+        assert 'class="synthesis"' in output
+        assert 'class="stats"' in output
 
 
 # =============================================================================

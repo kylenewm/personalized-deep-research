@@ -110,6 +110,32 @@ async def supervisor_tools(state: SupervisorState, config: RunnableConfig) -> Co
         for tool_call in most_recent_message.tool_calls
     )
 
+    # Get min iterations (1 in test mode for speed, configurable otherwise)
+    min_iterations = 1 if configurable.test_mode else getattr(configurable, 'min_research_iterations', 3)
+    source_count = len(state.get("source_store", []))
+    max_sources = getattr(configurable, 'max_total_sources', 150)
+
+    # Reject early ResearchComplete - force more thorough research
+    if research_complete_tool_call and research_iterations < min_iterations:
+        rc_tool_call = next(
+            tc for tc in most_recent_message.tool_calls
+            if tc["name"] == "ResearchComplete"
+        )
+        print(f"[SUPERVISOR] Rejecting early ResearchComplete (iteration {research_iterations}/{min_iterations}, sources: {source_count})")
+        return Command(
+            goto="supervisor",
+            update={
+                "supervisor_messages": [ToolMessage(
+                    content=f"[REJECTED] ResearchComplete called too early. "
+                            f"You are on iteration {research_iterations}, minimum is {min_iterations}. "
+                            f"Sources collected: {source_count}/{max_sources}. "
+                            f"Explore DIFFERENT angles of the research question before completing.",
+                    name="ResearchComplete",
+                    tool_call_id=rc_tool_call["id"]
+                )]
+            }
+        )
+
     # Exit if any termination condition is met
     if exceeded_allowed_iterations or no_tool_calls or research_complete_tool_call:
         return Command(
@@ -251,6 +277,23 @@ async def supervisor_tools(state: SupervisorState, config: RunnableConfig) -> Co
             if new_sources:
                 update_payload["source_store"] = existing_sources + new_sources
                 print(f"[SUPERVISOR] Sources: {len(existing_sources)} existing + {len(new_sources)} new = {len(existing_sources) + len(new_sources)} total")
+
+            # Inject progress feedback into tool messages so supervisor knows status
+            total_sources = len(existing_sources) + len(new_sources)
+            max_iterations = configurable.get_effective_max_researcher_iterations()
+            progress_note = (
+                f"\n\n[PROGRESS] Iteration {research_iterations}/{max_iterations}. "
+                f"Sources: {total_sources}/{max_sources}. "
+                f"Consider: What angles haven't been explored yet?"
+            )
+            # Append progress to the last tool message
+            if all_tool_messages:
+                last_msg = all_tool_messages[-1]
+                all_tool_messages[-1] = ToolMessage(
+                    content=last_msg.content + progress_note,
+                    name=last_msg.name,
+                    tool_call_id=last_msg.tool_call_id
+                )
 
         except Exception as e:
             # Handle research execution errors

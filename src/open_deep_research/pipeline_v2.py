@@ -11,6 +11,8 @@ import asyncio
 import json
 import re
 from dataclasses import dataclass, field
+from datetime import datetime
+from pathlib import Path
 from typing import Dict, List, Optional, Tuple
 
 # Handle both relative and absolute imports for testing
@@ -26,6 +28,7 @@ try:
         format_facts_for_cleanup,
         parse_cleanup_response,
         verify_and_apply_cleanup,
+        verify_span,  # I9: Span verification required
     )
 except ImportError:
     from pointer_extract import (
@@ -39,6 +42,7 @@ except ImportError:
         format_facts_for_cleanup,
         parse_cleanup_response,
         verify_and_apply_cleanup,
+        verify_span,  # I9: Span verification required
     )
 
 # Import retry utility
@@ -46,6 +50,24 @@ try:
     from .utils import retry_with_backoff
 except ImportError:
     from utils import retry_with_backoff
+
+# Import artifacts for run persistence (I10)
+try:
+    from .artifacts import (
+        create_run_artifacts,
+        save_run_artifacts,
+        SourceArtifact,
+        ExtractionArtifact,
+        compute_content_hash,
+    )
+except ImportError:
+    from artifacts import (
+        create_run_artifacts,
+        save_run_artifacts,
+        SourceArtifact,
+        ExtractionArtifact,
+        compute_content_hash,
+    )
 
 
 # =============================================================================
@@ -220,8 +242,14 @@ Output JSON array (empty [] if no facts):
     # Verify against full source content
     source_dict = {source_id: source}
     extractions = []
+    content = source.get("content", "") or source.get("raw_content", "")
     for pointer in all_pointers:
         result = extract_from_pointer(pointer, source_dict, min_score=min_score)
+        # I9: Verify span against source content
+        if result.status == "verified" and content:
+            if not verify_span(result, content):
+                result.status = "span_mismatch"
+                result.failure_reason = "span_verification_failed"
         extractions.append(result)
 
     return extractions
@@ -272,6 +300,13 @@ async def extract_batch(
     extractions = []
     for pointer in pointers:
         result = extract_from_pointer(pointer, batch, min_score=min_score)
+        # I9: Verify span against source content
+        if result.status == "verified":
+            source = batch.get(pointer.source_id, {})
+            content = source.get("content", "") or source.get("raw_content", "")
+            if content and not verify_span(result, content):
+                result.status = "span_mismatch"
+                result.failure_reason = "span_verification_failed"
         extractions.append(result)
 
     return extractions
@@ -432,6 +467,96 @@ def deduplicate_extractions(
             kept.append(ext)
 
     return kept
+
+
+def deduplicate_with_diversity(
+    extractions: List[Extraction],
+    max_per_source: int = 5,
+    intra_source_diversity_threshold: float = 0.7,
+    cross_source_similarity_threshold: float = 0.5
+) -> List[Extraction]:
+    """Deduplicate while allowing top-K diverse facts per source.
+
+    Unlike basic deduplication, this allows multiple facts from rich sources
+    as long as they're diverse enough from each other.
+
+    Args:
+        extractions: List of verified extractions
+        max_per_source: Maximum facts to keep per source URL (default 5)
+        intra_source_diversity_threshold: Jaccard similarity threshold for same-source facts.
+            Facts from same source with similarity >= this are considered duplicates.
+        cross_source_similarity_threshold: Jaccard similarity threshold for cross-source dedup.
+            Facts from different sources with similarity >= this are considered duplicates.
+
+    Returns:
+        Deduplicated list with diverse facts per source
+    """
+    if not extractions:
+        return []
+
+    from collections import defaultdict
+
+    # Group by source URL
+    by_source = defaultdict(list)
+    for ext in extractions:
+        source_url = ext.source_url or "unknown"
+        by_source[source_url].append(ext)
+
+    # For each source, keep top-K diverse facts
+    source_kept = []
+    for source_url, source_extractions in by_source.items():
+        # Sort by score descending
+        sorted_exts = sorted(source_extractions, key=lambda x: x.match_score, reverse=True)
+
+        # Keep top-K but only if diverse from already-kept from this source
+        kept_from_source = []
+        for ext in sorted_exts:
+            if len(kept_from_source) >= max_per_source:
+                break
+
+            if not ext.extracted_text:
+                continue
+
+            ext_normalized = normalize_for_comparison(ext.extracted_text)
+
+            # Check diversity against already-kept from this source
+            is_diverse = True
+            for kept_ext in kept_from_source:
+                kept_normalized = normalize_for_comparison(kept_ext.extracted_text)
+                similarity = compute_text_similarity(ext_normalized, kept_normalized)
+                if similarity >= intra_source_diversity_threshold:
+                    is_diverse = False
+                    break
+
+            if is_diverse:
+                kept_from_source.append(ext)
+
+        source_kept.extend(kept_from_source)
+
+    # Cross-source deduplication: remove duplicates across sources
+    # Sort by score to keep higher-scoring version
+    source_kept = sorted(source_kept, key=lambda x: x.match_score, reverse=True)
+
+    final_kept = []
+    for ext in source_kept:
+        if not ext.extracted_text:
+            continue
+
+        ext_normalized = normalize_for_comparison(ext.extracted_text)
+
+        # Check against already-kept (from any source)
+        is_duplicate = False
+        for kept_ext in final_kept:
+            kept_normalized = normalize_for_comparison(kept_ext.extracted_text)
+            similarity = compute_text_similarity(ext_normalized, kept_normalized)
+            if similarity >= cross_source_similarity_threshold:
+                is_duplicate = True
+                break
+
+        if not is_duplicate:
+            final_kept.append(ext)
+
+    return final_kept
 
 
 # =============================================================================
@@ -642,7 +767,13 @@ You have {num_facts} verified facts. Your tasks:
    - DROP vague claims: "is a versatile tool", "offers many features"
    - DROP facts that don't contain specific information (names, numbers, comparisons)
    - DROP anything that reads like marketing copy
+   - DROP buzzword salad: text with "revolutionizing/transforming/leveraging/synergy/paradigm" AND no numbers
+   - DROP tautologies: "AI systems benefit from AI" (says nothing)
    - KEEP only facts with concrete details that help answer the question
+
+   **Test each fact:** What SPECIFIC thing did I learn?
+   - "Hamming runs 10K concurrent calls" → SPECIFIC → keep
+   - "Platform leverages AI for better results" → VAGUE → drop
 
 2. RELEVANCE FILTER:
    - Does this fact DIRECTLY help answer "{topic}"?
@@ -922,6 +1053,97 @@ async def synthesize_theme(
         citations=citations,
         facts=facts
     )
+
+
+def validate_no_new_facts(prose: str, facts: List[Extraction]) -> List[str]:
+    """Deterministic check that prose doesn't introduce claims not in facts.
+
+    Checks for:
+    - Numbers in prose not found in any cited fact
+    - Superlatives (best, fastest, most, etc.) without attribution
+
+    Args:
+        prose: The synthesized prose text
+        facts: List of facts that were provided as sources
+
+    Returns:
+        List of violation descriptions (empty if valid)
+    """
+    violations = []
+
+    # Collect all numbers from prose (with optional units)
+    prose_numbers = set(re.findall(r'\d+(?:\.\d+)?(?:%|ms|k|M|GB|MB|TB|x|X)?', prose))
+
+    # Collect all numbers from facts
+    fact_numbers = set()
+    for f in facts:
+        if f.extracted_text:
+            fact_numbers.update(re.findall(r'\d+(?:\.\d+)?(?:%|ms|k|M|GB|MB|TB|x|X)?', f.extracted_text))
+
+    # New numbers in prose = potential violation
+    new_numbers = prose_numbers - fact_numbers
+    # Filter out citation markers [1], [2], etc.
+    new_numbers = {n for n in new_numbers if not re.match(r'^\d+$', n) or int(n) > 50}  # Citation markers are usually < 50
+
+    if new_numbers:
+        violations.append(f"Prose contains numbers not in facts: {new_numbers}")
+
+    # Check superlatives - they should have attribution (citation or "according to")
+    superlatives = re.findall(r'\b(best|fastest|most|largest|smallest|only|first|leading|top)\b', prose, re.I)
+    for sup in superlatives:
+        # Look for citation within 50 chars after superlative
+        pattern = rf'{re.escape(sup)}.{{0,50}}(\[\d+\]|according to|claims|reports)'
+        if not re.search(pattern, prose, re.I):
+            violations.append(f"Superlative '{sup}' not attributed")
+
+    return violations
+
+
+def validate_section_citations(section: ThemedSection) -> List[str]:
+    """Validate that citations in prose reference actual content in facts.
+
+    Args:
+        section: A themed section with prose, citations, and facts
+
+    Returns:
+        List of violation descriptions (empty if valid)
+    """
+    violations = []
+
+    # For each citation in the prose, check that the claim is supported
+    for citation in section.citations:
+        if citation.fact_index < 0 or citation.fact_index >= len(section.facts):
+            violations.append(f"Citation {citation.marker} references non-existent fact")
+            continue
+
+        fact = section.facts[citation.fact_index]
+        if not fact.extracted_text:
+            violations.append(f"Citation {citation.marker} references fact with no text")
+            continue
+
+        # Find the sentence containing this citation marker
+        marker_pattern = re.escape(citation.marker)
+        # Find sentences containing this marker
+        sentences = re.split(r'(?<=[.!?])\s+', section.prose)
+        marker_sentences = [s for s in sentences if citation.marker in s]
+
+        for sentence in marker_sentences:
+            # Extract key anchors from sentence (numbers, proper nouns)
+            anchors = re.findall(r'\d+(?:\.\d+)?(?:%|ms|k|M)?|\b[A-Z][a-z]+(?:\s+[A-Z][a-z]+)?', sentence)
+
+            if anchors:
+                # At least one anchor should appear in the cited fact
+                fact_text = fact.extracted_text.lower()
+                matching_anchors = [a for a in anchors if a.lower() in fact_text]
+
+                if len(matching_anchors) < 1 and len(anchors) > 0:
+                    # No anchors match - potential hallucination
+                    violations.append(
+                        f"Citation {citation.marker} claim may not match fact: "
+                        f"anchors {anchors[:3]} not found in fact"
+                    )
+
+    return violations
 
 
 # =============================================================================
@@ -1332,7 +1554,9 @@ async def run_pipeline_v2(
     batch_size: int = BATCH_SIZE,
     min_score: float = DEFAULT_MIN_SCORE,
     on_progress=None,  # callback(stage, message)
-    prefer_authoritative_sources: bool = True  # Add quality guidance to prompts
+    prefer_authoritative_sources: bool = True,  # Add quality guidance to prompts
+    artifacts_dir: Optional[Path] = None,  # I10: Save run artifacts to this directory
+    checkpoint_dir: Optional[Path] = None,  # I11: Save checkpoints to this directory
 ) -> HybridReport:
     """Run the full three-stage pipeline.
 
@@ -1345,6 +1569,8 @@ async def run_pipeline_v2(
         min_score: Verification threshold
         on_progress: Progress callback
         prefer_authoritative_sources: If True, inject source quality guidance into prompts
+        artifacts_dir: If provided, save run artifacts to this directory (I10)
+        checkpoint_dir: If provided, save checkpoints to this directory (I11)
 
     Returns:
         HybridReport ready for rendering
@@ -1354,6 +1580,21 @@ async def run_pipeline_v2(
             on_progress(stage, msg)
         else:
             print(f"[{stage}] {msg}")
+
+    # I10: Create run artifacts if persistence requested
+    run_artifacts = None
+    if artifacts_dir:
+        run_artifacts = create_run_artifacts(topic)
+        # Record source metadata
+        for src_id, src in sources.items():
+            content = src.get("content", "") or src.get("raw_content", "")
+            run_artifacts.sources.append(SourceArtifact(
+                url=src.get("url", ""),
+                title=src.get("title", ""),
+                content_hash=compute_content_hash(content),
+                content_length=len(content)
+            ))
+        progress("ARTIFACTS", f"Created run artifacts: {run_artifacts.run_id}")
 
     # Stage 1: Batched extraction
     progress("EXTRACT", f"Extracting from {len(sources)} sources in batches of {batch_size}...")
@@ -1456,6 +1697,29 @@ async def run_pipeline_v2(
     ])
     sections = list(sections)  # Convert tuple to list
 
+    # Validate synthesis output (no-new-facts gate + citation validation)
+    synthesis_violations = []
+    for section in sections:
+        # Check for new facts introduced by prose
+        new_fact_violations = validate_no_new_facts(section.prose, section.facts)
+        if new_fact_violations:
+            synthesis_violations.extend([f"[{section.theme}] {v}" for v in new_fact_violations])
+
+        # Check citation validity
+        citation_violations = validate_section_citations(section)
+        if citation_violations:
+            synthesis_violations.extend([f"[{section.theme}] {v}" for v in citation_violations])
+
+    if synthesis_violations:
+        # Log warnings but don't block - these are diagnostic for now
+        import logging
+        logger = logging.getLogger(__name__)
+        logger.warning(f"Synthesis validation warnings ({len(synthesis_violations)} issues):")
+        for v in synthesis_violations[:10]:  # Limit to first 10
+            logger.warning(f"  - {v}")
+        if len(synthesis_violations) > 10:
+            logger.warning(f"  ... and {len(synthesis_violations) - 10} more")
+
     # Final assembly
     progress("ASSEMBLE", "Generating executive summary, analysis, conclusion...")
     report = await assemble_report(
@@ -1471,5 +1735,28 @@ async def run_pipeline_v2(
 
     # Attach checkpoints for fixture extraction
     report.checkpoints = checkpoints
+
+    # I10: Save run artifacts if directory provided
+    if run_artifacts and artifacts_dir:
+        run_artifacts.verified_count = report.verified_count
+        run_artifacts.total_extracted = len(all_extractions)
+        run_artifacts.synthesis_themes = [s.theme for s in sections]
+        # Compute report hash for integrity tracking
+        try:
+            report_html = render_hybrid_report(report, use_color=False)
+            run_artifacts.report_hash = compute_content_hash(report_html)
+        except Exception:
+            run_artifacts.report_hash = ""
+        artifact_path = save_run_artifacts(run_artifacts, artifacts_dir)
+        progress("ARTIFACTS", f"Saved run artifacts to {artifact_path}")
+
+    # I11: Persist checkpoints to disk if directory provided
+    if checkpoint_dir:
+        checkpoint_dir.mkdir(parents=True, exist_ok=True)
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        checkpoint_file = checkpoint_dir / f"checkpoint_{timestamp}.json"
+        with open(checkpoint_file, 'w') as f:
+            json.dump(checkpoints, f, indent=2, default=str)
+        progress("CHECKPOINT", f"Saved checkpoints to {checkpoint_file}")
 
     return report

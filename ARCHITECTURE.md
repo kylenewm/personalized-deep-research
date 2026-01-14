@@ -486,6 +486,50 @@ Tavily Search
     extract_evidence → verify_evidence → final_report
 ```
 
+### Pipeline v2 Extraction Flow (Phase 8)
+
+```
+Source Content
+     │
+     ▼
+┌─────────────────────┐
+│ LLM: POINTER_PROMPT │
+│ {source_id,         │
+│  keywords[],        │
+│  micro_quote,       │  ← NEW: 8-15 word verbatim phrase
+│  context}           │
+└──────────┬──────────┘
+           │
+           ▼
+┌─────────────────────────────────────────────────────────┐
+│ find_best_match()                                       │
+│  1. Try micro_quote strict match (highest confidence)   │
+│  2. find_tightest_keyword_window() sliding window       │
+│  3. Sentence fallback if keyword window fails           │
+└──────────┬──────────────────────────────────────────────┘
+           │
+           ▼
+Returns: (text, score, span_start, span_end, keywords_matched, method)
+           │
+           ▼
+┌─────────────────────────────────────────────────────────┐
+│ verify_span() — I9: REQUIRED before inclusion in report │
+│  - Check extracted_text exists at span position         │
+│  - If fail: status → "span_mismatch"                    │
+└──────────┬──────────────────────────────────────────────┘
+           │
+           ▼
+┌─────────────────────┐
+│ is_quality_extraction() │
+│  - Reject tables, nav   │
+│  - Check alpha ratio    │
+│  - Apply cleanup guards │
+└──────────┬──────────────┘
+           │
+           ▼
+    Extraction with full diagnostics
+```
+
 ### Message Flow
 
 ```
@@ -637,6 +681,17 @@ class ResearcherState(TypedDict):
 | `safeguarded_batch_size` | 12 | Sources per extraction batch |
 | `safeguarded_min_score` | 0.4 | Minimum match score for verification |
 
+### Pipeline v2 Parameters (Phase 8)
+
+| Parameter | Default | Description |
+|-----------|---------|-------------|
+| `artifacts_dir` | None | Directory to save run artifacts (I10) |
+| `checkpoint_dir` | None | Directory to save checkpoints (I11) |
+| `prefer_authoritative_sources` | true | Inject source quality guidance into prompts |
+| `max_per_source` | 5 | Max facts per URL in diversity dedup |
+| `intra_source_diversity_threshold` | 0.7 | Similarity threshold within same source |
+| `cross_source_similarity_threshold` | 0.5 | Similarity threshold across sources |
+
 ---
 
 ## Pipeline v2: Safeguarded Generation
@@ -663,11 +718,43 @@ Safeguarded (Pipeline v2):
 
 **What it does:**
 1. Batch sources (10-12 per batch)
-2. LLM outputs pointers: `{source_id, keywords[], context}`
+2. LLM outputs pointers: `{source_id, keywords[], micro_quote, context}`
 3. Code uses keyword matching to find actual text in source
-4. Quality filter rejects garbage (tables, metadata, fragments)
+4. Span verification ensures extracted text matches source position (I9)
+5. Quality filter rejects garbage (tables, metadata, fragments)
 
 **Key insight:** Single keywords match better than phrases. "Biden", "October", "2023" works better than "October 2023".
+
+**Extraction Dataclass (Phase 8):**
+```python
+@dataclass
+class Extraction:
+    pointer: Pointer
+    status: str  # "verified", "partial", "not_found", "span_mismatch"
+    extracted_text: Optional[str] = None
+    match_score: float = 0.0
+    source_url: Optional[str] = None
+    # Span offsets for reverification (character positions in source)
+    span_start: int = -1
+    span_end: int = -1
+    # Keywords that were actually matched
+    keywords_matched: List[str] = field(default_factory=list)
+    # How this extraction was verified
+    verification_method: str = "keyword_window"  # "micro_quote", "strict_substring"
+    # Structured failure diagnostics
+    failure_reason: Optional[str] = None  # "keywords_missing", "score_too_low", "quality_reject"
+    failure_details: Optional[dict] = None
+```
+
+**Key Functions:**
+- `find_best_match()` - Returns 6-tuple: `(text, score, span_start, span_end, keywords_matched, method)`
+- `find_tightest_keyword_window()` - Sliding window to find minimal span covering keywords
+- `expand_to_sentence_bounds()` - Expands keyword window to sentence boundaries
+- `verify_span()` - Deterministic check that extracted text exists at span position
+
+**Micro-Quote Matching:** The `POINTER_PROMPT` requests a `micro_quote` field (8-15 word verbatim phrase) for high-confidence substring matching before falling back to keyword window.
+
+**Cleanup Guards:** `NEGATION_TOKENS` and `QUALIFIER_TOKENS` prevent semantic loss during LLM-assisted cleanup by rejecting cleanups that remove negations ("not", "never") or qualifiers ("only", "approximately").
 
 #### Stage 2: Arranger (Grouping + Curation)
 
@@ -711,7 +798,7 @@ Another verified fact...
 </div>
 ```
 
-### Deduplication (Two-Stage)
+### Deduplication (Three-Stage)
 
 **Stage 1: LLM Semantic Dedup**
 - LLM identifies semantically duplicate facts
@@ -724,6 +811,12 @@ Another verified fact...
 - Uses Jaccard similarity with number protection
 - If both texts have numbers and they differ → not duplicate
 
+**Stage 3: Top-K Per Source (NEW in Phase 8)**
+- `deduplicate_with_diversity()` allows multiple facts from rich sources
+- `max_per_source` parameter (default 5) caps facts per URL
+- Intra-source diversity threshold (0.7) ensures variety within same source
+- Cross-source similarity threshold (0.5) catches global duplicates
+
 ### Pipeline Checkpoints
 
 All stages captured in `hybrid_report.checkpoints`:
@@ -734,6 +827,76 @@ All stages captured in `hybrid_report.checkpoints`:
 
 Used by `scripts/extract_fixtures.py` to create component test data.
 
+**Checkpoint Persistence (I11):** When `checkpoint_dir` is provided to `run_pipeline_v2()`, checkpoints are saved to JSON file (`checkpoint_{timestamp}.json`) for post-hoc analysis.
+
+### Run Artifacts (Phase 8)
+
+**File:** `src/open_deep_research/artifacts.py`
+
+Run artifacts provide complete records for reproducibility and debugging:
+
+**Dataclasses:**
+```python
+@dataclass
+class SourceArtifact:
+    url: str
+    title: str
+    content_hash: str  # SHA256[:16] of content
+    content_length: int
+
+@dataclass
+class PointerArtifact:
+    source_id: str
+    keywords: List[str]
+    micro_quote: Optional[str]
+    context: str
+
+@dataclass
+class ExtractionArtifact:
+    pointer_source_id: str
+    status: str
+    extracted_text: Optional[str]
+    match_score: float
+    span_start: int
+    span_end: int
+    keywords_matched: List[str]
+    verification_method: str
+    failure_reason: Optional[str]
+
+@dataclass
+class DedupDecision:
+    kept_index: int
+    removed_index: int
+    similarity: float
+    reason: str
+
+@dataclass
+class RunArtifacts:
+    run_id: str
+    timestamp: str
+    query: str
+    config_hash: str
+    prompt_versions: Dict[str, str]  # prompt_name -> SHA256[:8]
+    sources: List[SourceArtifact]
+    pointers: List[PointerArtifact]
+    extractions: List[ExtractionArtifact]
+    dedup_decisions: List[DedupDecision]
+    arrangement: Dict[str, Any]
+    synthesis_themes: List[str]
+    synthesis_violations: List[str]
+    report_hash: str
+    verified_count: int
+    total_extracted: int
+```
+
+**Key Functions:**
+- `compute_prompt_versions()` — SHA256[:8] hash of all prompts for regression attribution
+- `save_run_artifacts(artifacts, output_dir)` — Save to JSON file
+- `load_run_artifacts(filepath)` — Load from JSON file
+- `diff_prompt_versions(old, new)` — Compare prompt versions between runs
+
+**Artifact Persistence (I10):** When `artifacts_dir` is provided to `run_pipeline_v2()`, complete run artifacts are saved for replay and comparison.
+
 ### Quality Filter
 
 Rejects garbage extractions:
@@ -743,6 +906,22 @@ Rejects garbage extractions:
 - Truncated content
 - Markdown artifacts
 
+### Synthesis Validation (Phase 8)
+
+After theme synthesis, two validation functions check for hallucination:
+
+**`validate_no_new_facts(prose, facts)`**
+- Checks that numbers in prose appear in cited facts
+- Flags superlatives ("best", "fastest") without attribution
+- Returns list of violation descriptions
+
+**`validate_section_citations(section)`**
+- For each citation marker, checks claim matches fact content
+- Extracts anchors (numbers, proper nouns) from prose sentences
+- Flags citations where anchors don't appear in cited fact
+
+Violations are logged as warnings (non-blocking) for diagnostic purposes.
+
 ### Key Files
 
 | File | Purpose |
@@ -751,6 +930,38 @@ Rejects garbage extractions:
 | `pointer_extract.py` | Pointer extraction, keyword matching, quality filter |
 | `synthesis.py` | Report assembly helpers |
 | `nodes/safeguarded_report.py` | LangGraph node wrapper |
+| `artifacts.py` | Run artifact persistence (I10) |
+
+---
+
+## Invariants (Phase 8 Additions)
+
+See `INVARIANTS.md` for the full list. Phase 8 added:
+
+### I9: Span Verification Required
+
+All extractions with `status="verified"` MUST pass `verify_span()` before inclusion in reports.
+
+**Enforcement:**
+- `extract_batch()` and `extract_from_source_chunked()` call `verify_span()` after extraction
+- Failed verification sets `status="span_mismatch"` and `failure_reason="span_verification_failed"`
+- Reports must not include span_mismatch extractions in Verified sections
+
+### I10: Run Artifacts Persistence
+
+Every pipeline run SHOULD produce a saved artifact file when `artifacts_dir` is provided.
+
+**Required fields:** `run_id`, `timestamp`, source content hashes, prompt version hashes, `report_hash`
+
+**Enforcement:** `run_pipeline_v2()` calls `save_run_artifacts()` when directory provided.
+
+### I11: Checkpoint Persistence
+
+Pipeline checkpoints SHOULD be persisted to disk when `checkpoint_dir` is provided.
+
+**Required keys:** `pre_dedup`, `post_dedup`, `pre_arrangement`, `post_arrangement`
+
+**Enforcement:** `run_pipeline_v2()` saves `checkpoint_{timestamp}.json` when directory provided.
 
 ---
 
@@ -837,6 +1048,7 @@ Every single claim MUST have a citation.
 | `verification.py` | Claim verification with embeddings |
 | `logic/sanitize.py` | HTML sanitization for quotes |
 | `logic/document_processing.py` | Spacy-based chunking |
+| `artifacts.py` | Run artifact persistence, prompt versioning (Phase 8) |
 
 ### Pipeline v2 (Safeguarded Generation)
 

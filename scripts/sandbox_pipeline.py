@@ -266,11 +266,14 @@ async def run_pipeline_only(name: str, use_brief: bool = False, custom_topic: st
 
     print(f"[SANDBOX] Loading: {name}")
     print(f"[SANDBOX] Topic ({topic_source}): {topic[:80]}...")
-    print(f"[SANDBOX] Sources: {len(state['source_store'])}")
+
+    # Handle both old (source_store) and new (sources) fixture formats
+    source_list = state.get("source_store") or state.get("sources", [])
+    print(f"[SANDBOX] Sources: {len(source_list)}")
 
     # Convert source_store to dict format for pipeline
     sources = {}
-    for i, source in enumerate(state["source_store"]):
+    for i, source in enumerate(source_list):
         src_id = f"src_{i:03d}"
         sources[src_id] = {
             "content": source.get("content", ""),
@@ -294,13 +297,26 @@ async def run_pipeline_only(name: str, use_brief: bool = False, custom_topic: st
     print(f"[SANDBOX] Running Pipeline v2...")
     start = datetime.now()
 
+    # Set up output directories
+    if output_dir is None:
+        output_dir = Path(__file__).parent.parent / "sandbox_output"
+    output_dir.mkdir(exist_ok=True)
+
+    # Create artifacts and checkpoint directories
+    artifacts_dir = output_dir / "artifacts"
+    checkpoint_dir = output_dir / "checkpoints"
+    artifacts_dir.mkdir(exist_ok=True)
+    checkpoint_dir.mkdir(exist_ok=True)
+
     report = await run_pipeline_v2(
         sources=sources,
         topic=topic,
         title=f"Research: {state['query'][:50]}",
         llm_call=llm_call,
         batch_size=10,
-        min_score=0.3
+        min_score=0.3,
+        artifacts_dir=artifacts_dir,      # I10: Save run artifacts
+        checkpoint_dir=checkpoint_dir,    # I11: Save checkpoints
     )
 
     elapsed = (datetime.now() - start).total_seconds()
@@ -308,11 +324,6 @@ async def run_pipeline_only(name: str, use_brief: bool = False, custom_topic: st
 
     # Render
     rendered = render_hybrid_report(report)
-
-    # Save output
-    if output_dir is None:
-        output_dir = Path(__file__).parent.parent / "sandbox_output"
-    output_dir.mkdir(exist_ok=True)
 
     output_path = output_dir / f"{name}_{datetime.now().strftime('%H%M%S')}.md"
     with open(output_path, "w") as f:
@@ -454,9 +465,10 @@ async def run_diagnostics(name: str, use_brief: bool = False):
                 total_stats["not_found_no_source"] += 1
                 continue
 
-            # Try to match
-            extracted_text, score = find_best_match(
-                pointer.keywords, content, min_score=DEFAULT_MIN_SCORE
+            # Try to match (returns 6-tuple with span info and method)
+            extracted_text, score, span_start, span_end, keywords_matched, method = find_best_match(
+                pointer.keywords, content, min_score=DEFAULT_MIN_SCORE,
+                micro_quote=getattr(pointer, 'micro_quote', None)
             )
 
             if not extracted_text:

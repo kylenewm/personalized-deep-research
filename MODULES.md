@@ -20,9 +20,10 @@ Complete inventory of every file in the project.
 
 | File | Lines | Purpose |
 |------|-------|---------|
-| `pipeline_v2.py` | 1475 | **Three-stage extraction pipeline** - batch extraction, dedup, arrangement, synthesis |
-| `pointer_extract.py` | 662 | **Keyword matching extraction** - Pointer/Extraction dataclasses, fuzzy matching, quality filters |
+| `pipeline_v2.py` | ~1760 | **Three-stage extraction pipeline** - batch extraction, dedup, arrangement, synthesis |
+| `pointer_extract.py` | ~1010 | **Keyword matching extraction** - Pointer/Extraction dataclasses, fuzzy matching, quality filters |
 | `synthesis.py` | 136 | **Prose synthesis** - connects verified facts with LLM-written transitions |
+| `artifacts.py` | ~245 | **NEW: Run artifact storage** - prompt versioning, reproducibility, run diffing |
 
 ### Verification & Evaluation
 
@@ -274,20 +275,27 @@ ResearcherState(TypedDict)
 └── source_store: List[dict]
 ```
 
-### Pipeline v2 Types (`pipeline_v2.py`)
+### Pipeline v2 Types (`pipeline_v2.py`, `pointer_extract.py`)
 
 ```python
 Pointer
 ├── source_id: str
 ├── keywords: List[str]
-└── context: str
+├── context: str
+└── micro_quote: Optional[str]  # NEW: 8-15 word verbatim phrase for strict matching
 
 Extraction
 ├── pointer: Pointer
-├── status: str  # "verified", "partial", "not_found"
+├── status: str  # "verified", "partial", "not_found", "span_mismatch"
 ├── extracted_text: str
 ├── match_score: float
-└── source_url: str
+├── source_url: str
+├── span_start: int  # NEW: Character position in source
+├── span_end: int  # NEW: Character position in source
+├── keywords_matched: List[str]  # NEW: Keywords actually found
+├── verification_method: str  # NEW: "micro_quote", "keyword_window", "sentence_fallback"
+├── failure_reason: Optional[str]  # NEW: "keywords_missing", "score_too_low", etc.
+└── failure_details: Optional[dict]  # NEW: Structured diagnostics
 
 HybridReport
 ├── title: str
@@ -304,6 +312,56 @@ ThemedSection
 ├── prose: str
 ├── citations: List[Citation]
 └── facts: List[Extraction]
+```
+
+### Artifact Types (`artifacts.py`)
+
+```python
+SourceArtifact
+├── url: str
+├── title: str
+├── content_hash: str  # SHA256[:16] of content
+└── content_length: int
+
+PointerArtifact
+├── source_id: str
+├── keywords: List[str]
+├── micro_quote: Optional[str]
+└── context: str
+
+ExtractionArtifact
+├── pointer_source_id: str
+├── status: str
+├── extracted_text: Optional[str]
+├── match_score: float
+├── span_start: int
+├── span_end: int
+├── keywords_matched: List[str]
+├── verification_method: str
+└── failure_reason: Optional[str]
+
+DedupDecision
+├── kept_index: int
+├── removed_index: int
+├── similarity: float
+└── reason: str  # "jaccard_duplicate", "same_source", etc.
+
+RunArtifacts
+├── run_id: str
+├── timestamp: str
+├── query: str
+├── config_hash: str
+├── prompt_versions: Dict[str, str]  # prompt_name -> sha256[:8]
+├── sources: List[SourceArtifact]
+├── pointers: List[PointerArtifact]
+├── extractions: List[ExtractionArtifact]
+├── dedup_decisions: List[DedupDecision]
+├── arrangement: Dict[str, Any]
+├── synthesis_themes: List[str]
+├── synthesis_violations: List[str]
+├── report_hash: str
+├── verified_count: int
+└── total_extracted: int
 ```
 
 ### Configuration (`configuration.py`)
@@ -331,14 +389,71 @@ Configuration
 
 ---
 
+## Key Functions (Phase 8)
+
+### artifacts.py
+
+| Function | Signature | Purpose |
+|----------|-----------|---------|
+| `compute_prompt_versions()` | `() -> Dict[str, str]` | Computes SHA256[:8] hashes for all prompts (POINTER_PROMPT, CLEANUP_PROMPT, ARRANGER_PROMPT, THEME_SYNTHESIS_PROMPT, EXECUTIVE_SUMMARY_PROMPT, ANALYSIS_PROMPT, CONCLUSION_PROMPT) |
+| `save_run_artifacts()` | `(artifacts: RunArtifacts, path: Path) -> Path` | Serializes run artifacts to JSON file |
+| `load_run_artifacts()` | `(path: Path) -> RunArtifacts` | Loads run artifacts from JSON file |
+| `diff_prompt_versions()` | `(old: RunArtifacts, new: RunArtifacts) -> Dict[str, tuple]` | Compares prompt versions between runs, returns changed prompts |
+| `create_run_artifacts()` | `(query: str, config: dict, run_id: str) -> RunArtifacts` | Creates new run artifact record with prompt versions |
+
+### pointer_extract.py
+
+| Function | Signature | Purpose |
+|----------|-----------|---------|
+| `find_tightest_keyword_window()` | `(content: str, keywords: List[str], max_window: int) -> Tuple[str, int, int, List[str], float]` | Sliding window algorithm to find minimal span covering most keywords |
+| `expand_to_sentence_bounds()` | `(content: str, start: int, end: int, max_expand: int) -> Tuple[int, int]` | Expands character spans to sentence boundaries for readability |
+| `verify_span()` | `(extraction: Extraction, source_content: str) -> bool` | Deterministic reverification: checks extracted_text matches span position |
+| `find_best_match()` | `(keywords: List[str], source: str, min_score: float, micro_quote: str) -> Tuple[str, float, int, int, List[str], str]` | Returns 6-tuple with text, score, span offsets, matched keywords, and method |
+| `verify_and_apply_cleanup()` | `(original: str, cleaned: str) -> Optional[str]` | Guards against semantic loss (negation/qualifier/number removal) |
+
+**Constants:**
+- `NEGATION_TOKENS`: Set of words that must not be removed (`not`, `never`, `no`, `without`, etc.)
+- `QUALIFIER_TOKENS`: Set of precision words that must not be removed (`only`, `approximately`, `at least`, etc.)
+
+### pipeline_v2.py
+
+| Function | Signature | Purpose |
+|----------|-----------|---------|
+| `validate_no_new_facts()` | `(prose: str, facts: List[Extraction]) -> List[str]` | Checks prose doesn't introduce numbers/claims not in cited facts |
+| `validate_section_citations()` | `(section: ThemedSection) -> List[str]` | Validates citation markers reference actual content in facts |
+| `deduplicate_with_diversity()` | `(extractions: List[Extraction], max_per_source: int, thresholds: dict) -> List[Extraction]` | Dedup allowing top-K diverse facts per source (intra/cross-source thresholds) |
+| `run_pipeline_v2()` | New params: `artifacts_dir: Path`, `checkpoint_dir: Path` | Supports artifact persistence (I10) and checkpoint saving (I11) |
+
+---
+
 ## File Size Summary
 
 ```
-Source Code:     13,068 lines (30+ files)
+Source Code:     ~14,000 lines (31 files)  # +artifacts.py, expanded pointer_extract/pipeline_v2
 Scripts:         10,669 lines (47 files)
 Tests:            2,500+ lines
 Documentation:   12,000+ lines
 Templates:          500+ lines
 ─────────────────────────────────
-Total:          ~40,000 lines
+Total:          ~42,000 lines
 ```
+
+---
+
+## Phase 8 Changes Summary (2026-01-13)
+
+**New module:** `artifacts.py` - Run artifact storage for reproducibility and prompt versioning.
+
+**Major updates to `pointer_extract.py`:**
+- Extraction dataclass expanded with span tracking (span_start, span_end), keyword matching (keywords_matched), verification method tracking, and structured failure diagnostics
+- Pointer dataclass gained micro_quote field for strict substring matching
+- New sliding window algorithm (find_tightest_keyword_window) for robust extraction
+- Sentence boundary expansion for cleaner extractions
+- Deterministic span reverification (verify_span)
+- Cleanup guards against semantic loss (NEGATION_TOKENS, QUALIFIER_TOKENS)
+
+**Major updates to `pipeline_v2.py`:**
+- Synthesis validation: validate_no_new_facts() checks prose doesn't hallucinate
+- Citation validation: validate_section_citations() verifies citations match facts
+- Improved deduplication: deduplicate_with_diversity() with per-source limits
+- New pipeline parameters: artifacts_dir and checkpoint_dir for persistence

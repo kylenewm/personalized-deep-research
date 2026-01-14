@@ -93,3 +93,44 @@
 | I4 | VIOLATED | verify.py:144 returns `{}` on disabled, leaves snippets in PENDING state |
 
 **Action required:** Fix I1, I2 tokenization, and I4 violations.
+
+### 2026-01-13 — Phase 8: Wire Up Dead Code
+
+Added invariants for infrastructure that was written but not wired up:
+
+### I9: Span Verification Required
+
+**Contract:** All extractions with status="verified" MUST pass `verify_span()` check before being used in reports.
+
+**Enforcement:**
+- `extract_batch()` and `extract_from_source_chunked()` must call `verify_span()` after extraction
+- Extractions failing span verification must be downgraded to status="span_mismatch"
+- Reports must not include extractions with span_mismatch status in "Verified" sections
+
+**Rationale:** Span offsets enable deterministic reverification. Without calling verify_span(), the spans are untested and could be invalid after text cleaning.
+
+### I10: Run Artifacts Persistence
+
+**Contract:** Every pipeline run SHOULD produce a saved artifact file when `artifacts_dir` is provided, containing:
+- `run_id` and `timestamp`
+- Source content hashes (for reproducibility)
+- Prompt version hashes (for regression attribution)
+- Final report hash
+
+**Enforcement:**
+- `run_pipeline_v2()` must call `save_run_artifacts()` when `artifacts_dir` is provided
+- Artifact files must be JSON-serializable and loadable via `load_run_artifacts()`
+- Tests must verify artifact files are created and contain required fields
+
+**Rationale:** Without persisted artifacts, runs cannot be replayed or compared for regressions.
+
+### I11: Checkpoint Persistence
+
+**Contract:** Pipeline checkpoints SHOULD be persisted to disk when `checkpoint_dir` is provided, not just attached to in-memory HybridReport.
+
+**Enforcement:**
+- `run_pipeline_v2()` must save checkpoints to JSON file when `checkpoint_dir` is provided
+- Checkpoint files must contain: `pre_dedup`, `post_dedup`, `pre_arrangement`, `post_arrangement`
+- Tests must verify checkpoint files are created with all required keys
+
+**Rationale:** In-memory checkpoints are lost when the process ends. Persisted checkpoints enable post-hoc analysis and fixture extraction.

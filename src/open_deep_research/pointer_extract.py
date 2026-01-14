@@ -21,6 +21,7 @@ class Pointer:
     source_id: str  # Which source to extract from
     keywords: List[str]  # Key terms to find
     context: str  # What this extraction is about (for organization)
+    micro_quote: Optional[str] = None  # 8-15 word verbatim phrase for strict matching
 
 
 @dataclass
@@ -31,6 +32,16 @@ class Extraction:
     extracted_text: Optional[str] = None
     match_score: float = 0.0
     source_url: Optional[str] = None
+    # NEW: Span offsets for reverification (character positions in source)
+    span_start: int = -1
+    span_end: int = -1
+    # NEW: Keywords that were actually matched
+    keywords_matched: List[str] = field(default_factory=list)
+    # NEW: How this extraction was verified
+    verification_method: str = "keyword_window"  # "micro_quote", "strict_substring"
+    # NEW: Structured failure diagnostics
+    failure_reason: Optional[str] = None  # "keywords_missing", "score_too_low", "quality_reject", "source_missing", "content_empty"
+    failure_details: Optional[dict] = None  # {"missing_keywords": [...], "score": 0.2}
 
 
 @dataclass
@@ -244,59 +255,272 @@ def is_quality_extraction(text: str, max_words: int = 50) -> bool:
     return True
 
 
+def find_tightest_keyword_window(
+    content: str,
+    keywords: List[str],
+    max_window_chars: int = 500
+) -> Tuple[Optional[str], int, int, List[str], float]:
+    """Find minimal span covering most keywords using sliding window.
+
+    This is more robust than sentence splitting because it doesn't break on
+    abbreviations like "Dr.", "vs.", "Inc.", etc.
+
+    Args:
+        content: Normalized source content (lowercase for matching)
+        keywords: List of lowercase keywords to find
+        max_window_chars: Maximum window size to consider
+
+    Returns:
+        (text, span_start, span_end, keywords_matched, coverage_ratio) or (None, -1, -1, [], 0.0)
+    """
+    if not content or not keywords:
+        return None, -1, -1, [], 0.0
+
+    content_lower = content.lower()
+
+    # Find all positions of each keyword
+    keyword_positions = {}  # keyword -> list of (start, end) positions
+    for kw in keywords:
+        positions = []
+        start = 0
+        while True:
+            idx = content_lower.find(kw, start)
+            if idx == -1:
+                break
+            positions.append((idx, idx + len(kw)))
+            start = idx + 1
+        if positions:
+            keyword_positions[kw] = positions
+
+    if not keyword_positions:
+        return None, -1, -1, [], 0.0
+
+    # If only one keyword found, return its first occurrence
+    if len(keyword_positions) == 1:
+        kw = list(keyword_positions.keys())[0]
+        pos = keyword_positions[kw][0]
+        return content[pos[0]:pos[1]], pos[0], pos[1], [kw], 1.0 / len(keywords)
+
+    # Build list of all keyword occurrences with their keyword index
+    # Format: (position, keyword)
+    all_positions = []
+    for kw, positions in keyword_positions.items():
+        for start, end in positions:
+            all_positions.append((start, kw, end))
+
+    # Sort by position
+    all_positions.sort(key=lambda x: x[0])
+
+    # Sliding window to find tightest span covering most keywords
+    best_window = None
+    best_coverage = 0
+    best_length = float('inf')
+
+    n = len(all_positions)
+    for i in range(n):
+        # Start a window from position i
+        window_start = all_positions[i][0]
+        covered_kws = set()
+
+        for j in range(i, n):
+            pos_start, kw, pos_end = all_positions[j]
+            window_end = pos_end
+
+            # Check if window is too large
+            if window_end - window_start > max_window_chars:
+                break
+
+            covered_kws.add(kw)
+            coverage = len(covered_kws)
+            window_length = window_end - window_start
+
+            # Better coverage, or same coverage with shorter window
+            if coverage > best_coverage or (coverage == best_coverage and window_length < best_length):
+                best_coverage = coverage
+                best_length = window_length
+                best_window = (window_start, window_end, list(covered_kws))
+
+    if not best_window:
+        return None, -1, -1, list(keyword_positions.keys()), 0.0
+
+    start, end, matched = best_window
+    coverage_ratio = len(matched) / len(keywords)
+
+    return content[start:end], start, end, matched, coverage_ratio
+
+
+def expand_to_sentence_bounds(
+    content: str,
+    span_start: int,
+    span_end: int,
+    max_expand: int = 100
+) -> Tuple[int, int]:
+    """Expand span to sentence boundaries for better readability.
+
+    Args:
+        content: Source content
+        span_start: Start of keyword window
+        span_end: End of keyword window
+        max_expand: Maximum chars to expand in each direction
+
+    Returns:
+        (expanded_start, expanded_end)
+    """
+    # Sentence ending patterns
+    sentence_ends = '.!?'
+
+    # Expand backwards to find sentence start
+    search_start = max(0, span_start - max_expand)
+    expanded_start = span_start
+    for i in range(span_start - 1, search_start - 1, -1):
+        if content[i] in sentence_ends:
+            # Found sentence end - next char is sentence start
+            expanded_start = i + 1
+            # Skip whitespace
+            while expanded_start < span_start and content[expanded_start].isspace():
+                expanded_start += 1
+            break
+    else:
+        # No sentence end found - go to search_start
+        expanded_start = search_start
+
+    # Expand forwards to find sentence end
+    search_end = min(len(content), span_end + max_expand)
+    expanded_end = span_end
+    for i in range(span_end, search_end):
+        if content[i] in sentence_ends:
+            expanded_end = i + 1
+            break
+    else:
+        # No sentence end found - go to search_end
+        expanded_end = search_end
+
+    return expanded_start, expanded_end
+
+
 def find_best_match(
     keywords: List[str],
     source_content: str,
-    min_score: float = 0.6
-) -> Tuple[Optional[str], float]:
+    min_score: float = 0.6,
+    micro_quote: Optional[str] = None
+) -> Tuple[Optional[str], float, int, int, List[str], str]:
     """Find the best matching sentence/passage containing keywords.
+
+    Uses micro-quote strict matching first, then tightest keyword window algorithm.
 
     Args:
         keywords: List of key terms to find
         source_content: Full text of source
         min_score: Minimum match score (0-1)
+        micro_quote: Optional verbatim phrase for strict substring matching
 
     Returns:
-        (extracted_text, match_score) or (None, 0.0)
+        (extracted_text, match_score, span_start, span_end, keywords_matched, method)
+        where method is "micro_quote", "keyword_window", or "sentence_fallback"
+        or (None, 0.0, -1, -1, [], "") on failure
     """
     if not keywords or not source_content:
-        return None, 0.0
+        return None, 0.0, -1, -1, [], ""
 
     # Light cleaning only - strip HTML but keep full length for searching
     source_content = re.sub(r'<[^>]+>', '', source_content)  # Strip HTML tags
     source_content = re.sub(r'\s+', ' ', source_content).strip()  # Normalize whitespace
 
-    # Normalize
-    content_lower = source_content.lower()
+    # PRIMARY: Try micro-quote strict matching first (highest confidence)
+    if micro_quote and len(micro_quote) >= 10:  # Minimum 10 chars for meaningful quote
+        # Normalize micro_quote whitespace
+        micro_quote_normalized = re.sub(r'\s+', ' ', micro_quote).strip()
+
+        # Try exact match first
+        if micro_quote_normalized in source_content:
+            start = source_content.find(micro_quote_normalized)
+            end = start + len(micro_quote_normalized)
+
+            # Expand to sentence boundaries for context
+            exp_start, exp_end = expand_to_sentence_bounds(source_content, start, end)
+            expanded_text = source_content[exp_start:exp_end].strip()
+
+            # Quality check
+            if expanded_text.count('|') < 2:  # Not a table
+                cleaned = clean_extracted_text(expanded_text, max_length=500)
+                if is_quality_extraction(cleaned):
+                    # Determine keywords in the matched text
+                    keywords_lower = [k.lower().strip() for k in keywords if k.strip()]
+                    matched_kws = [kw for kw in keywords_lower if kw in cleaned.lower()]
+                    if cleaned in source_content:
+                        clean_start = source_content.find(cleaned)
+                        clean_end = clean_start + len(cleaned)
+                        return cleaned, 1.0, clean_start, clean_end, matched_kws, "micro_quote"
+                    return cleaned, 1.0, exp_start, exp_end, matched_kws, "micro_quote"
+
+        # Try case-insensitive match
+        source_lower = source_content.lower()
+        micro_lower = micro_quote_normalized.lower()
+        if micro_lower in source_lower:
+            start = source_lower.find(micro_lower)
+            end = start + len(micro_lower)
+
+            exp_start, exp_end = expand_to_sentence_bounds(source_content, start, end)
+            expanded_text = source_content[exp_start:exp_end].strip()
+
+            if expanded_text.count('|') < 2:
+                cleaned = clean_extracted_text(expanded_text, max_length=500)
+                if is_quality_extraction(cleaned):
+                    keywords_lower = [k.lower().strip() for k in keywords if k.strip()]
+                    matched_kws = [kw for kw in keywords_lower if kw in cleaned.lower()]
+                    if cleaned in source_content:
+                        clean_start = source_content.find(cleaned)
+                        clean_end = clean_start + len(cleaned)
+                        return cleaned, 1.0, clean_start, clean_end, matched_kws, "micro_quote"
+                    return cleaned, 1.0, exp_start, exp_end, matched_kws, "micro_quote"
+
+    # Normalize keywords
     keywords_lower = [k.lower().strip() for k in keywords if k.strip()]
 
     if not keywords_lower:
-        return None, 0.0
+        return None, 0.0, -1, -1, [], ""
 
-    # Check if all keywords exist in source
-    keywords_found = []
-    for kw in keywords_lower:
-        if kw in content_lower:
-            keywords_found.append(kw)
+    # Check which keywords exist in source
+    content_lower = source_content.lower()
+    keywords_found = [kw for kw in keywords_lower if kw in content_lower]
 
     if not keywords_found:
-        return None, 0.0
+        return None, 0.0, -1, -1, [], ""
 
     match_ratio = len(keywords_found) / len(keywords_lower)
 
     if match_ratio < min_score:
-        return None, match_ratio
+        return None, match_ratio, -1, -1, keywords_found, ""
 
-    # Find ALL sentences containing keywords, ranked by score
+    # SECONDARY: Use tightest keyword window algorithm
+    # This is more robust than sentence splitting (handles "Dr.", "vs.", etc.)
+    window_text, span_start, span_end, matched_kws, coverage = find_tightest_keyword_window(
+        source_content, keywords_lower
+    )
+
+    if window_text and coverage >= min_score:
+        # Expand window to sentence boundaries for readability
+        exp_start, exp_end = expand_to_sentence_bounds(source_content, span_start, span_end)
+        expanded_text = source_content[exp_start:exp_end].strip()
+
+        # Early reject: table rows (2+ pipes = markdown table syntax)
+        if expanded_text.count('|') < 2:
+            cleaned = clean_extracted_text(expanded_text, max_length=500)
+            if is_quality_extraction(cleaned):
+                # Recalculate span for cleaned text if it's a substring
+                if cleaned in source_content:
+                    clean_start = source_content.find(cleaned)
+                    clean_end = clean_start + len(cleaned)
+                    return cleaned, coverage, clean_start, clean_end, matched_kws, "keyword_window"
+                return cleaned, coverage, exp_start, exp_end, matched_kws, "keyword_window"
+
+    # FALLBACK: Sentence-based approach for cases where keyword window didn't work
     # Split on: paragraphs, markdown headers, table rows, then sentences
-    # First split on paragraph/structural boundaries
     chunks = re.split(r'\n\n+|\n(?=##?\s)|\n(?=\|)', source_content)
-    # Then split each chunk into sentences
     sentences = []
     for chunk in chunks:
         chunk = chunk.strip()
         if chunk:
-            # Split on sentence endings
             sents = re.split(r'(?<=[.!?])\s+', chunk)
             sentences.extend([s.strip() for s in sents if s.strip()])
 
@@ -304,47 +528,54 @@ def find_best_match(
     candidates = []
     for sent in sentences:
         sent_lower = sent.lower()
-        sent_keywords = sum(1 for kw in keywords_found if kw in sent_lower)
-        if sent_keywords > 0:
-            score = sent_keywords / len(keywords_lower)
-            candidates.append((score, sent.strip()))
+        sent_keywords = [kw for kw in keywords_found if kw in sent_lower]
+        if sent_keywords:
+            score = len(sent_keywords) / len(keywords_lower)
+            span_start = source_content.find(sent)
+            span_end = span_start + len(sent) if span_start >= 0 else -1
+            candidates.append((score, sent.strip(), span_start, span_end, sent_keywords))
 
-    # Also try sentence pairs for better context
+    # Also try sentence pairs and triplets
     for i in range(len(sentences) - 1):
         passage = sentences[i] + " " + sentences[i + 1]
         passage_lower = passage.lower()
-        passage_keywords = sum(1 for kw in keywords_found if kw in passage_lower)
-        if passage_keywords > 0:
-            score = passage_keywords / len(keywords_lower)
-            candidates.append((score, passage.strip()))
+        passage_keywords = [kw for kw in keywords_found if kw in passage_lower]
+        if passage_keywords:
+            score = len(passage_keywords) / len(keywords_lower)
+            span_start = source_content.find(sentences[i])
+            span_end = span_start + len(passage) if span_start >= 0 else -1
+            candidates.append((score, passage.strip(), span_start, span_end, passage_keywords))
 
-    # Also try sentence triplets for full context (handles "it", "they", "this")
     for i in range(len(sentences) - 2):
         passage = sentences[i] + " " + sentences[i + 1] + " " + sentences[i + 2]
         passage_lower = passage.lower()
-        passage_keywords = sum(1 for kw in keywords_found if kw in passage_lower)
-        if passage_keywords > 0:
-            score = passage_keywords / len(keywords_lower)
-            candidates.append((score, passage.strip()))
+        passage_keywords = [kw for kw in keywords_found if kw in passage_lower]
+        if passage_keywords:
+            score = len(passage_keywords) / len(keywords_lower)
+            span_start = source_content.find(sentences[i])
+            span_end = span_start + len(passage) if span_start >= 0 else -1
+            candidates.append((score, passage.strip(), span_start, span_end, passage_keywords))
 
-    # Sort by score descending, then by length ascending (prefer minimal extraction at same score)
-    # This lets keywords naturally define scope - if they span 3 sentences, we get 3
+    # Sort by score descending, then by length ascending
     candidates.sort(key=lambda x: (x[0], -len(x[1])), reverse=True)
 
     # Return first candidate that passes quality filter
-    # max_length=500 to allow up to 3 sentences for full context
-    for score, text in candidates:
+    for score, text, span_start, span_end, matched_kws in candidates:
         if score >= min_score:
-            # Early reject: table rows (2+ pipes = markdown table syntax)
             if text.count('|') >= 2:
                 continue
             cleaned = clean_extracted_text(text, max_length=500)
             if is_quality_extraction(cleaned):
-                return cleaned, score
+                if cleaned in source_content:
+                    clean_start = source_content.find(cleaned)
+                    clean_end = clean_start + len(cleaned)
+                    return cleaned, score, clean_start, clean_end, matched_kws, "sentence_fallback"
+                return cleaned, score, span_start, span_end, matched_kws, "sentence_fallback"
 
     # No fallback - if quality filter rejects all candidates, return None
-    # This enforces the quality gate as final arbiter
-    return None, candidates[0][0] if candidates else 0.0
+    best_score = candidates[0][0] if candidates else 0.0
+    best_kws = candidates[0][4] if candidates else []
+    return None, best_score, -1, -1, best_kws, ""
 
 
 def extract_from_pointer(
@@ -360,7 +591,7 @@ def extract_from_pointer(
         min_score: Minimum match score for verification
 
     Returns:
-        Extraction result with status and text
+        Extraction result with status, text, spans, and failure diagnostics
     """
     source = sources.get(pointer.source_id)
 
@@ -368,7 +599,9 @@ def extract_from_pointer(
         return Extraction(
             pointer=pointer,
             status="not_found",
-            match_score=0.0
+            match_score=0.0,
+            failure_reason="source_missing",
+            failure_details={"source_id": pointer.source_id}
         )
 
     content = source.get("content", "") or source.get("raw_content", "")
@@ -379,40 +612,111 @@ def extract_from_pointer(
             pointer=pointer,
             status="not_found",
             source_url=url,
-            match_score=0.0
+            match_score=0.0,
+            failure_reason="content_empty",
+            failure_details={"source_id": pointer.source_id, "url": url}
         )
 
-    extracted_text, score = find_best_match(
+    # Check keyword presence first for diagnostic purposes
+    content_lower = content.lower()
+    keywords_lower = [k.lower().strip() for k in pointer.keywords if k.strip()]
+    missing_keywords = [kw for kw in keywords_lower if kw not in content_lower]
+
+    if len(missing_keywords) > len(keywords_lower) * 0.5:
+        # More than half of keywords missing - early reject with diagnostics
+        return Extraction(
+            pointer=pointer,
+            status="not_found",
+            source_url=url,
+            match_score=0.0,
+            failure_reason="keywords_missing",
+            failure_details={
+                "missing": missing_keywords,
+                "total": len(keywords_lower),
+                "missing_ratio": len(missing_keywords) / len(keywords_lower) if keywords_lower else 1.0
+            }
+        )
+
+    extracted_text, score, span_start, span_end, keywords_matched, method = find_best_match(
         pointer.keywords,
         content,
-        min_score=min_score
+        min_score=min_score,
+        micro_quote=pointer.micro_quote  # NEW: Pass micro_quote for strict matching
     )
 
     # Apply quality filter to extracted text
     if extracted_text and not is_quality_extraction(extracted_text):
-        # Garbage extraction - mark as not found
+        # Garbage extraction - mark as not found with diagnostics
         return Extraction(
             pointer=pointer,
             status="not_found",
             extracted_text=None,
-            match_score=0.0,
-            source_url=url
+            match_score=score,
+            source_url=url,
+            span_start=span_start,
+            span_end=span_end,
+            keywords_matched=keywords_matched,
+            verification_method=method or "keyword_window",
+            failure_reason="quality_reject",
+            failure_details={"rejected_text_preview": extracted_text[:100] if extracted_text else None}
         )
 
     if extracted_text and score >= min_score:
         status = "verified"
+        failure_reason = None
+        failure_details = None
     elif score > 0:
         status = "partial"
+        failure_reason = "score_too_low"
+        failure_details = {"score": score, "min_required": min_score}
     else:
         status = "not_found"
+        failure_reason = "no_match"
+        failure_details = {"keywords": pointer.keywords}
 
     return Extraction(
         pointer=pointer,
         status=status,
         extracted_text=extracted_text,
         match_score=score,
-        source_url=url
+        source_url=url,
+        span_start=span_start,
+        span_end=span_end,
+        keywords_matched=keywords_matched,
+        verification_method=method or "keyword_window",  # NEW: Use actual method from find_best_match
+        failure_reason=failure_reason,
+        failure_details=failure_details
     )
+
+
+def verify_span(extraction: Extraction, source_content: str) -> bool:
+    """Deterministic verification: check extracted_text is at the span position.
+
+    Args:
+        extraction: Extraction with span_start and span_end populated
+        source_content: Original source content (normalized)
+
+    Returns:
+        True if extracted_text matches the span in source, False otherwise
+    """
+    if extraction.span_start < 0 or extraction.span_end <= extraction.span_start:
+        return False
+
+    if not extraction.extracted_text:
+        return False
+
+    # Normalize source content same way as find_best_match
+    source_content = re.sub(r'<[^>]+>', '', source_content)
+    source_content = re.sub(r'\s+', ' ', source_content).strip()
+
+    # Check if extracted text can be found at the span position
+    if extraction.span_end > len(source_content):
+        return False
+
+    span_text = source_content[extraction.span_start:extraction.span_end]
+
+    # The extracted text should match (or be within) the span
+    return extraction.extracted_text in span_text or span_text in extraction.extracted_text
 
 
 # Prompt for LLM to clean extractions - outputs clean text, code verifies substring
@@ -453,8 +757,18 @@ def parse_cleanup_response(response: str) -> List[dict]:
     return []
 
 
+# Tokens that should NEVER be removed during cleanup (semantic loss)
+NEGATION_TOKENS = {"not", "never", "no", "without", "except", "unless", "don't", "doesn't", "can't", "won't", "isn't", "aren't"}
+QUALIFIER_TOKENS = {"only", "just", "approximately", "about", "up to", "at least", "nearly", "almost", "less than", "more than"}
+
+
 def verify_and_apply_cleanup(original: str, cleaned: str) -> Optional[str]:
-    """Verify cleaned text is exact substring of original.
+    """Verify cleaned text is exact substring of original without semantic loss.
+
+    Guards against:
+    - Removing negation tokens (not, never, without, etc.)
+    - Removing numbers/metrics
+    - Removing qualifiers (only, approximately, etc.)
 
     Returns cleaned text if valid, None if should reject.
     """
@@ -462,8 +776,33 @@ def verify_and_apply_cleanup(original: str, cleaned: str) -> Optional[str]:
         return None  # Reject - no meaningful content
 
     if cleaned in original:
-        # Valid - it's an exact substring
+        # Valid - it's an exact substring, but check for semantic loss
         if len(cleaned) >= 50:  # Minimum length for meaningful content
+            # Check for negation loss
+            orig_tokens = set(original.lower().split())
+            clean_tokens = set(cleaned.lower().split())
+
+            # Reject if negation removed
+            orig_negations = orig_tokens & NEGATION_TOKENS
+            clean_negations = clean_tokens & NEGATION_TOKENS
+            if orig_negations - clean_negations:
+                # Lost a negation - this changes meaning, keep original
+                return original
+
+            # Reject if qualifier removed
+            orig_qualifiers = orig_tokens & QUALIFIER_TOKENS
+            clean_qualifiers = clean_tokens & QUALIFIER_TOKENS
+            if orig_qualifiers - clean_qualifiers:
+                # Lost a qualifier - this changes precision, keep original
+                return original
+
+            # Reject if numbers removed
+            orig_numbers = set(re.findall(r'\d+(?:\.\d+)?(?:%|ms|k|M|GB|MB|TB)?', original))
+            clean_numbers = set(re.findall(r'\d+(?:\.\d+)?(?:%|ms|k|M|GB|MB|TB)?', cleaned))
+            if orig_numbers - clean_numbers:
+                # Lost a number - keep original
+                return original
+
             return cleaned
         else:
             return None  # Too short after cleaning
@@ -505,21 +844,32 @@ BAD - DO NOT EXTRACT:
 ✗ Multi-sentence passages: If keywords span 2+ sentences, TOO MUCH
 ✗ Promotional fluff: "Learn more", "Try our platform", "Best-in-class"
 ✗ Vague claims: "Very fast", "Great performance", "Easy to use" (no metrics)
+✗ Buzzword salad (sounds technical, says nothing):
+  - "Advanced natural language understanding transformations..."
+  - "Leveraging innovative AI to deliver seamless enterprise solutions"
+  - "Revolutionizing comprehension capabilities through integration"
+  - If text has "revolutionizing/transforming/leveraging/synergy" + no numbers → SKIP
+✗ Tautologies (obvious statements):
+  - "Voice AI systems benefit from AI improvements"
+  - "Modern platforms use modern technology"
 
 If text has "ProductName: claim", point to keywords in the claim AFTER the colon.
 
-For each fact, keywords must be from ONE sentence:
+For each fact, provide:
 - source_id: exactly as shown (src_000, src_001, etc)
 - keywords: 3-5 distinctive words from ONE sentence only
+- micro_quote: 8-15 word phrase that MUST appear VERBATIM in the source (copy-paste exactly!)
 - context: brief 3-6 word label
+
+The micro_quote is CRITICAL - it anchors the extraction to exact text. Copy it character-for-character.
 
 Sources:
 {sources}
 
 Output JSON array:
 [
-  {{"source_id": "src_000", "keywords": ["researchers", "discovered", "2024"], "context": "Research discovery findings"}},
-  {{"source_id": "src_001", "keywords": ["study", "participants", "improved"], "context": "Study participant outcomes"}}
+  {{"source_id": "src_000", "keywords": ["researchers", "discovered", "2024"], "micro_quote": "researchers discovered a breakthrough in 2024", "context": "Research discovery findings"}},
+  {{"source_id": "src_001", "keywords": ["study", "participants", "improved"], "micro_quote": "study participants improved by 35%", "context": "Study participant outcomes"}}
 ]'''
 
 
@@ -550,7 +900,8 @@ def parse_pointer_response(response: str, min_relevance: int = 3) -> List[Pointe
                     pointers.append(Pointer(
                         source_id=str(item.get("source_id", "")),
                         keywords=item.get("keywords", []),
-                        context=item.get("context", "")
+                        context=item.get("context", ""),
+                        micro_quote=item.get("micro_quote")  # NEW: Parse micro_quote
                     ))
             return pointers
     except json.JSONDecodeError:

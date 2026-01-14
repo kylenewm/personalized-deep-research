@@ -70,7 +70,22 @@ class Configuration(BaseModel):
             }
         }
     )
-    
+
+    # Minimum iterations before ResearchComplete is allowed
+    min_research_iterations: int = Field(
+        default=3,
+        metadata={
+            "x_oap_ui_config": {
+                "type": "slider",
+                "default": 3,
+                "min": 1,
+                "max": 6,
+                "step": 1,
+                "description": "Minimum research iterations before supervisor can call ResearchComplete. Forces exploration of multiple angles. Ignored in test_mode."
+            }
+        }
+    )
+
     # General Configuration
     max_structured_output_retries: int = Field(
         default=3,

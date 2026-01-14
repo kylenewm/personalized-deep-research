@@ -93,21 +93,43 @@ You have access to three main tools:
 </Available Tools>
 
 <Instructions>
-Think like a research manager with limited time and resources. Follow these steps:
+Think like a research manager. Follow these steps:
 
 1. **Read the question carefully** - What specific information does the user need?
 2. **Decide how to delegate the research** - Carefully consider the question and decide how to delegate the research. Are there multiple independent directions that can be explored simultaneously?
 3. **After each call to ConductResearch, pause and assess** - Do I have enough to answer? What's still missing?
 </Instructions>
 
-<Hard Limits>
-**Task Delegation Budgets** (Prevent excessive delegation):
-- **Bias towards single agent** - Use single agent for simplicity unless the user request has clear opportunity for parallelization
-- **Stop when you can answer confidently** - Don't keep delegating research for perfection
-- **Limit tool calls** - Always stop after {max_researcher_iterations} tool calls to ConductResearch and think_tool if you cannot find the right sources
+<Query Specificity - CRITICAL>
+When decomposing the question into ConductResearch topics, PRESERVE SPECIFIC TERMS from the original query.
+
+Example - User asks: "edge cases in voice AI latency"
+- BAD: "Voice AI best practices" ← loses "edge cases" and "latency"
+- GOOD: "Edge cases that cause voice AI latency spikes: jitter, packet loss, codec issues"
+
+Before each ConductResearch, verify:
+- Does my topic include the SPECIFIC terms from the user's question?
+- If user asked about "edge cases", does my topic mention edge cases?
+- If user asked about "2026", does my topic constrain to 2026 content?
+</Query Specificity>
+
+<Iteration Strategy>
+You have {max_researcher_iterations} research iterations. Use them to explore DIFFERENT angles.
+
+**Each iteration should cover a DIFFERENT aspect:**
+- Iteration 1: Core concepts and main sources
+- Iteration 2: Specific sub-topics, edge cases, constraints from the query
+- Iteration 3+: Fill gaps, find depth, resolve contradictions
+
+**Check [PROGRESS] after each iteration.** If sources are low and iterations remain, explore new angles.
+
+**DO NOT call ResearchComplete until you have:**
+- Explored at least 3 different angles/sub-topics
+- OR hit {max_researcher_iterations} iterations
+- OR collected sufficient sources to comprehensively answer the question
 
 **Maximum {max_concurrent_research_units} parallel agents per iteration**
-</Hard Limits>
+</Iteration Strategy>
 
 <Show Your Thinking>
 Before you call ConductResearch tool call, use think_tool to plan your approach:
@@ -434,6 +456,8 @@ Return "SKIP" for both summary and key_excerpts if ANY of these are true:
 - Content has no meaningful information related to the research topic
 - Content is too short or fragmented to be useful (just titles/headers with no substance)
 - Content is primarily about a different, unrelated topic
+- Content is primarily marketing/promotional with no concrete facts or metrics
+- Content is vague corporate speak or buzzword salad (e.g., "revolutionizing", "leveraging synergies", "cutting-edge solutions") without specific evidence, numbers, or verifiable claims
 
 If the content IS relevant and substantive, proceed with the summary guidelines below.
 

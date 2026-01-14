@@ -12,8 +12,10 @@ Detailed traces of how data moves through the system.
 4. [Deduplication Flow](#4-deduplication-flow)
 5. [Arrangement Flow](#5-arrangement-flow)
 6. [Synthesis Flow](#6-synthesis-flow)
-7. [Council Validation Flow](#7-council-validation-flow)
-8. [Evaluation Flow](#8-evaluation-flow)
+7. [Synthesis Validation Flow](#7-synthesis-validation-flow) ← NEW (Phase 8)
+8. [Council Validation Flow](#8-council-validation-flow)
+9. [Artifacts Flow](#9-artifacts-flow) ← NEW (Phase 8)
+10. [Evaluation Flow](#10-evaluation-flow)
 
 ---
 
@@ -116,7 +118,16 @@ After research_supervisor:
 After safeguarded_report:
 ├── final_report: str (HTML)
 ├── hybrid_report: dict (structured data)
-└── checkpoints: dict (pre/post dedup, arrangement)
+│   └── sections[].facts[]:
+│       ├── extracted_text: str
+│       ├── span_start, span_end: int ← NEW (Phase 8)
+│       ├── keywords_matched: List[str] ← NEW
+│       ├── verification_method: str ← NEW
+│       └── failure_reason: Optional[str] ← NEW
+├── checkpoints: dict (pre/post dedup, arrangement)
+│   └── Now persisted to checkpoint_YYYYMMDD_HHMMSS.json ← NEW (Phase 8)
+└── artifacts: (if artifacts_dir provided) ← NEW (Phase 8)
+    └── Saved to run_{id}_{date}.json
 
 After run_evaluation:
 └── eval_result: dict (metrics)
@@ -268,7 +279,7 @@ async def tavily_search(
 
 ## 3. Pointer Extraction Flow
 
-How facts are extracted from sources (Pipeline v2).
+How facts are extracted from sources (Pipeline v2). Updated 2026-01-13 with Phase 8 changes.
 
 ### Entry Point (`nodes/safeguarded_report.py`)
 
@@ -290,7 +301,9 @@ async def safeguarded_report_generation(state, config):
         topic=research_brief,
         title=title,
         llm_call=llm_call,
-        on_progress=on_progress
+        on_progress=on_progress,
+        artifacts_dir=Path("artifacts"),   # NEW: Artifact persistence
+        checkpoint_dir=Path("checkpoints") # NEW: Checkpoint persistence
     )
 ```
 
@@ -301,6 +314,13 @@ Stage 1: BATCH EXTRACTION
 ══════════════════════════════════════════════════════════════
 
 sources: Dict[source_id → {content, url, title}]
+  │
+  ▼
+CREATE ARTIFACTS RECORD (NEW)
+  │ artifacts = create_run_artifacts(topic)
+  │ For each source:
+  │   content_hash = SHA256(content)[:16]
+  │   Record SourceArtifact(url, title, content_hash, content_length)
   │
   ▼
 batch_sources(sources, batch_size=1)
@@ -315,7 +335,7 @@ For each batch (parallel via asyncio.gather):
   │   extract_from_source_chunked():
   │     1. chunk_content() → split at paragraph/sentence boundaries
   │     2. For each chunk:
-  │        - LLM extracts keywords
+  │        - LLM extracts keywords + micro_quote
   │        - Prompt: "Extract facts that help answer: {topic}"
   │     3. Verify against full content
   │
@@ -328,64 +348,86 @@ For each batch (parallel via asyncio.gather):
         3. parse_pointer_response() → List[Pointer]
         4. For each Pointer:
            - extract_from_pointer() → Extraction
+           - verify_span() → validate extraction (NEW)
   │
   ▼
 All extractions: List[Extraction]
-  ├── status: "verified" | "partial" | "not_found"
+  ├── status: "verified" | "partial" | "not_found" | "span_mismatch"
   ├── extracted_text: str (cleaned)
   ├── match_score: float (0.0-1.0)
-  └── source_url: str
+  ├── source_url: str
+  ├── span_start, span_end: int (character offsets) ← NEW
+  ├── keywords_matched: List[str] ← NEW
+  ├── verification_method: str ← NEW
+  └── failure_reason, failure_details: Optional ← NEW
 
 CHECKPOINT: checkpoints["pre_dedup"] = all extractions
+  │ If checkpoint_dir: save to checkpoint_YYYYMMDD_HHMMSS.json (NEW)
 ```
 
-### Pointer Extraction (`pointer_extract.py`)
+### Pointer Prompt (Updated)
 
 ```
 POINTER_PROMPT
 ══════════════════════════════════════════════════════════════
 
-"Research question: {topic}
+"Topic: {topic}
 
-A fact is a specific, verifiable claim. Examples:
-- 'Model X has 150ms latency' ✓
-- 'Pricing starts at $0.01 per 1000 chars' ✓
-- 'This is where things get interesting' ✗ (intro fluff)
+Extract FACTUAL CLAIMS - single sentences with specific, verifiable information.
 
-Extract facts that help answer the research question.
-For each, output 3-5 unique keywords:
+CRITICAL: Each fact = ONE sentence. Keywords must all appear in the SAME sentence.
 
-Text:
-{sources}
+For each fact, provide:
+- source_id: exactly as shown (src_000, src_001, etc)
+- keywords: 3-5 distinctive words from ONE sentence only
+- micro_quote: 8-15 word phrase that MUST appear VERBATIM in the source ← NEW
+- context: brief 3-6 word label
+
+The micro_quote is CRITICAL - it anchors the extraction to exact text.
 
 Output JSON array:
-[{\"source_id\": \"src_001\", \"keywords\": [\"Model\", \"X\", \"150ms\"]}]"
+[
+  {\"source_id\": \"src_000\", \"keywords\": [...], \"micro_quote\": \"exact phrase from source\", \"context\": \"...\"}
+]"
 ```
 
-### Extraction from Pointer
+### Extraction from Pointer (Updated)
 
 ```
 extract_from_pointer(pointer, sources, min_score)
   │
   │ pointer.keywords: ["Model", "X", "150ms", "latency"]
+  │ pointer.micro_quote: "Model X achieves 150ms latency" ← NEW
   │
   ▼
-find_best_match(keywords, source_content, min_score):
+find_best_match(keywords, source_content, min_score, micro_quote):
   │
-  │ 1. Check if keywords exist in source
-  │    keywords_found = [k for k in keywords if k in content_lower]
-  │    match_ratio = len(found) / len(keywords)
+  │ ┌────────────────────────────────────────────────────────────┐
+  │ │ MATCHING ORDER (NEW - 3-tier approach):                     │
+  │ │                                                             │
+  │ │ 1. MICRO-QUOTE EXACT MATCH (highest confidence)             │
+  │ │    - Try exact substring match of micro_quote               │
+  │ │    - Then case-insensitive match                            │
+  │ │    - If found → score=1.0, method="micro_quote"             │
+  │ │                                                             │
+  │ │ 2. TIGHTEST KEYWORD WINDOW (NEW)                            │
+  │ │    - find_tightest_keyword_window(content, keywords)        │
+  │ │    - Sliding window finds minimal span covering keywords    │
+  │ │    - More robust than sentence splitting (handles Dr., vs.) │
+  │ │    - If found → method="keyword_window"                     │
+  │ │                                                             │
+  │ │ 3. SENTENCE FALLBACK                                        │
+  │ │    - Split on paragraphs, headers, sentences                │
+  │ │    - Score each sentence by keyword count                   │
+  │ │    - Try sentence pairs and triplets                        │
+  │ │    - If found → method="sentence_fallback"                  │
+  │ └────────────────────────────────────────────────────────────┘
   │
-  │ 2. If match_ratio < min_score: return (None, match_ratio)
+  ▼
+expand_to_sentence_bounds(content, span_start, span_end): ← NEW
   │
-  │ 3. Find sentences containing most keywords
-  │    Split on: paragraphs, headers, then sentences
-  │
-  │ 4. Score each sentence:
-  │    - keyword_count / len(keywords)
-  │    - Boost for consecutive keywords
-  │
-  │ 5. Return best sentence
+  │ Expand keyword window to sentence boundaries for readability
+  │ Look for .!? within max_expand chars in each direction
   │
   ▼
 clean_extracted_text(text, max_length=200):
@@ -411,8 +453,101 @@ Extraction(
   status="verified" | "partial" | "not_found",
   extracted_text=cleaned_text,
   match_score=score,
-  source_url=source["url"]
+  source_url=source["url"],
+  span_start=start,           ← NEW
+  span_end=end,               ← NEW
+  keywords_matched=matched,   ← NEW
+  verification_method=method, ← NEW
+  failure_reason=reason,      ← NEW
+  failure_details=details     ← NEW
 )
+```
+
+### Tightest Keyword Window Algorithm (NEW)
+
+```
+find_tightest_keyword_window(content, keywords, max_window_chars=500)
+══════════════════════════════════════════════════════════════
+
+PURPOSE: Find minimal span covering most keywords without
+         relying on sentence splitting (which breaks on
+         "Dr.", "vs.", "Inc.", etc.)
+
+ALGORITHM:
+  1. Find all positions of each keyword in content
+  2. Build list of (position, keyword, end_pos) tuples
+  3. Sort by position
+  4. Sliding window to find tightest coverage:
+     │
+     │ for i in range(n):
+     │   window_start = positions[i]
+     │   covered_keywords = set()
+     │
+     │   for j in range(i, n):
+     │     if window_end - window_start > max_window_chars:
+     │       break
+     │     covered_keywords.add(keyword[j])
+     │
+     │     if coverage > best_coverage:
+     │       best_window = (start, end, covered)
+     │
+  5. Return (text, span_start, span_end, keywords_matched, coverage_ratio)
+
+EXAMPLE:
+  Content: "In 2024, Model X achieved 150ms latency under load."
+  Keywords: ["Model", "X", "150ms", "latency"]
+
+  Positions: [(9, "Model"), (15, "X"), (25, "150ms"), (31, "latency")]
+
+  Best window: (9, 38) covering all 4 keywords
+  → "Model X achieved 150ms latency"
+```
+
+### Post-Extraction Verification (NEW)
+
+```
+AFTER EXTRACTION:
+══════════════════════════════════════════════════════════════
+
+verify_span(extraction, source_content):
+  │
+  │ PURPOSE: Deterministic reverification that extracted text
+  │          actually exists at the recorded span position.
+  │
+  │ CHECKS:
+  │   - span_start >= 0 and span_end > span_start
+  │   - extracted_text exists
+  │   - span_end <= len(source_content)
+  │   - extracted_text in span_text OR span_text in extracted_text
+  │
+  │ If verify_span() returns False:
+  │   extraction.status = "span_mismatch"
+  │   extraction.failure_reason = "span_verification_failed"
+  │
+  ▼
+Return verified or rejected extraction
+```
+
+### Cleanup Guards (NEW)
+
+```
+verify_and_apply_cleanup(original, cleaned):
+══════════════════════════════════════════════════════════════
+
+PURPOSE: Prevent cleanup from removing semantically important content.
+
+GUARDS:
+  1. NEGATION TOKENS - reject if cleanup removes:
+     {"not", "never", "no", "without", "except", "unless", "don't", ...}
+
+  2. QUALIFIER TOKENS - reject if cleanup removes:
+     {"only", "just", "approximately", "about", "up to", "at least", ...}
+
+  3. NUMBER PROTECTION - reject if cleanup removes:
+     Any numbers with units: 10%, 200ms, $1.2B, 50k, etc.
+
+If any guard triggers → return original text unchanged
+Otherwise → return cleaned text
 ```
 
 ---
@@ -642,7 +777,119 @@ HTML string → final_report in state
 
 ---
 
-## 7. Council Validation Flow
+## 7. Synthesis Validation Flow
+
+Post-synthesis checks to catch hallucination and citation errors (NEW - Phase 8).
+
+### No-New-Facts Validation (`pipeline_v2.py`)
+
+```
+validate_no_new_facts(prose, facts) → List[str]
+══════════════════════════════════════════════════════════════
+
+PURPOSE: Catch when synthesis introduces claims not in the source facts.
+         This is a key anti-hallucination gate.
+
+FLOW:
+  prose: "The framework achieves 2.5x speedup [1] with 99.9% accuracy..."
+  facts: [Extraction with "2.2x faster", Extraction with "95% accuracy"]
+  │
+  ▼
+STEP 1: Extract numbers from prose
+  │ Pattern: r'\d+(?:\.\d+)?(?:%|ms|k|M|GB|MB|TB|x|X)?'
+  │ Result: {"2.5x", "99.9%"}
+  │
+  ▼
+STEP 2: Extract numbers from all facts
+  │ Result: {"2.2x", "95%"}
+  │
+  ▼
+STEP 3: Find new numbers (not in facts)
+  │ new_numbers = prose_numbers - fact_numbers
+  │ Filter out citation markers ([1], [2], etc.)
+  │ Result: {"2.5x", "99.9%"} ← VIOLATIONS!
+  │
+  ▼
+STEP 4: Check superlatives without attribution
+  │ Superlatives: "best", "fastest", "most", "only", "first", etc.
+  │ For each superlative in prose:
+  │   - Find within 50 chars of a citation marker?
+  │   - If not → flag as unattributed superlative
+  │
+  ▼
+Return list of violations:
+  ["New number 2.5x not found in cited facts",
+   "New number 99.9% not found in cited facts"]
+```
+
+### Citation Validation (`pipeline_v2.py`)
+
+```
+validate_section_citations(section: ThemedSection) → List[str]
+══════════════════════════════════════════════════════════════
+
+PURPOSE: Verify that citation anchors (numbers, proper nouns)
+         actually appear in the cited fact.
+
+FLOW:
+  section.prose: "Model X achieves 150ms latency [1]."
+  section.facts[0].extracted_text: "Model Y has 200ms response time"
+  │
+  ▼
+For each citation in section.citations:
+  │
+  ├── Check fact exists
+  │   if citation.fact_index >= len(facts):
+  │     violation: "Citation [1] references non-existent fact"
+  │
+  ├── Check fact has text
+  │   if not fact.extracted_text:
+  │     violation: "Citation [1] references fact with no text"
+  │
+  └── Check anchor match
+      │ 1. Find sentence containing citation marker
+      │ 2. Extract anchors from sentence:
+      │    - Numbers: r'\d+(?:\.\d+)?(?:%|ms|k|M)?'
+      │    - Proper nouns: r'\b[A-Z][a-z]+(?:\s+[A-Z][a-z]+)?'
+      │ 3. For each anchor:
+      │    - Is it in fact.extracted_text?
+      │    - If not → violation
+      │
+      │ Example:
+      │   Sentence: "Model X achieves 150ms latency [1]."
+      │   Anchors: ["Model X", "150ms"]
+      │   Fact: "Model Y has 200ms response time"
+      │   → violation: "Anchor 'Model X' not in cited fact"
+      │   → violation: "Anchor '150ms' not in cited fact"
+  │
+  ▼
+Return list of violations
+```
+
+### Integration in Synthesis
+
+```
+synthesize_theme(theme_group, topic, llm_call):
+  │
+  │ ... generate prose with citations ...
+  │
+  ▼
+VALIDATION STEP (NEW):
+  │
+  │ violations = validate_no_new_facts(prose, facts)
+  │ violations += validate_section_citations(section)
+  │
+  │ if violations:
+  │   logger.warning(f"Synthesis violations for {theme}: {violations}")
+  │   # Note: Currently logs only; could block in strict mode
+  │
+  ▼
+Return ThemedSection (with logged violations)
+```
+
+---
+
+## 8. Council Validation Flow
 
 Multi-model consensus for brief and findings validation.
 
@@ -743,7 +990,183 @@ Proceed to research_supervisor
 
 ---
 
-## 8. Evaluation Flow
+## 9. Artifacts Flow
+
+Run artifact storage for reproducibility and debugging (NEW - Phase 8).
+
+### Overview (`artifacts.py`)
+
+```
+PURPOSE: Store immutable records of pipeline runs for:
+  - Replaying runs with different prompts
+  - Diffing runs to understand changes
+  - Attributing regressions to specific prompt changes
+
+ARTIFACT STRUCTURE:
+══════════════════════════════════════════════════════════════
+
+RunArtifacts
+├── run_id: str           # UUID[:8]
+├── timestamp: str        # ISO format
+├── query: str            # Research topic
+├── config_hash: str      # SHA256 of config
+├── prompt_versions: Dict[str, str]  # prompt_name → SHA256[:8]
+│
+├── sources: List[SourceArtifact]
+│   ├── url: str
+│   ├── title: str
+│   ├── content_hash: str   # SHA256[:16] of content
+│   └── content_length: int
+│
+├── pointers: List[PointerArtifact]
+│   ├── source_id: str
+│   ├── keywords: List[str]
+│   ├── micro_quote: Optional[str]
+│   └── context: str
+│
+├── extractions: List[ExtractionArtifact]
+│   ├── pointer_source_id: str
+│   ├── status: str
+│   ├── extracted_text: Optional[str]
+│   ├── match_score: float
+│   ├── span_start, span_end: int
+│   ├── keywords_matched: List[str]
+│   ├── verification_method: str
+│   └── failure_reason: Optional[str]
+│
+├── dedup_decisions: List[DedupDecision]
+│   ├── kept_index: int
+│   ├── removed_index: int
+│   ├── similarity: float
+│   └── reason: str
+│
+├── arrangement: Dict
+├── synthesis_themes: List[str]
+├── synthesis_violations: List[str]  # From validation
+│
+└── report_hash: str      # SHA256 of final output
+```
+
+### Prompt Versioning
+
+```
+compute_prompt_versions() → Dict[str, str]
+══════════════════════════════════════════════════════════════
+
+PURPOSE: Track which prompt versions were used in a run.
+         Enables attributing regressions to specific changes.
+
+PROMPTS TRACKED:
+  POINTER_PROMPT         → e.g., "5919c7fa"
+  CLEANUP_PROMPT         → e.g., "d8fd00f9"
+  ARRANGER_PROMPT        → e.g., "9b061b8e"
+  THEME_SYNTHESIS_PROMPT → e.g., "f3db638a"
+  EXECUTIVE_SUMMARY_PROMPT
+  ANALYSIS_PROMPT
+  CONCLUSION_PROMPT
+
+COMPUTATION:
+  version = SHA256(prompt_text).hexdigest()[:8]
+```
+
+### Pipeline Integration
+
+```
+run_pipeline_v2(sources, topic, ..., artifacts_dir, checkpoint_dir):
+══════════════════════════════════════════════════════════════
+
+AT START:
+  │
+  │ if artifacts_dir:
+  │   artifacts = create_run_artifacts(topic)
+  │
+  │   # Record sources with content hashes
+  │   for src_id, src in sources.items():
+  │     content = src.get("content", "")
+  │     artifacts.sources.append(SourceArtifact(
+  │       url=src.get("url", ""),
+  │       title=src.get("title", ""),
+  │       content_hash=SHA256(content)[:16],
+  │       content_length=len(content)
+  │     ))
+  │
+  ▼
+
+DURING PIPELINE:
+  │ (Checkpoints captured as before)
+  │
+  ▼
+
+AT END:
+  │
+  │ if artifacts_dir:
+  │   artifacts.report_hash = SHA256(final_report)[:16]
+  │   artifacts.verified_count = count(verified extractions)
+  │   artifacts.total_extracted = total extractions
+  │
+  │   save_run_artifacts(artifacts, artifacts_dir)
+  │   # Creates: run_{run_id}_{date}.json
+  │
+  │ if checkpoint_dir:
+  │   save checkpoints to checkpoint_{timestamp}.json
+```
+
+### Checkpoint Persistence
+
+```
+CHECKPOINTS SAVED TO DISK:
+══════════════════════════════════════════════════════════════
+
+File: checkpoint_YYYYMMDD_HHMMSS.json
+
+{
+  "pre_dedup": [
+    {
+      "extracted_text": "...",
+      "source_id": "src_001",
+      "match_score": 0.85,
+      "span_start": 123,
+      "span_end": 456,
+      ...
+    },
+    ...
+  ],
+  "post_dedup": [...],
+  "pre_arrangement": [...],
+  "post_arrangement": {
+    "themes": [
+      {"name": "Theme 1", "fact_ids": [1, 4, 7]},
+      ...
+    ],
+    "excluded_ids": [3, 6, 8]
+  }
+}
+```
+
+### Diffing Runs
+
+```
+diff_prompt_versions(old_artifacts, new_artifacts) → Dict
+══════════════════════════════════════════════════════════════
+
+PURPOSE: Compare two runs to identify what changed.
+
+USAGE:
+  old = load_run_artifacts(Path("run_abc_2026-01-12.json"))
+  new = load_run_artifacts(Path("run_xyz_2026-01-13.json"))
+
+  changes = diff_prompt_versions(old, new)
+  # Returns: {
+  #   "POINTER_PROMPT": ("5919c7fa", "a1b2c3d4"),
+  #   "THEME_SYNTHESIS_PROMPT": ("f3db638a", "e5f6g7h8")
+  # }
+
+  # If verified_count dropped, blame the changed prompts
+```
+
+---
+
+## 10. Evaluation Flow
 
 Post-hoc quality assessment.
 
@@ -906,9 +1329,20 @@ PASS / WARN / FAIL based on thresholds in metrics.py
 | `researcher` | `nodes/researcher.py` | Executes web searches |
 | `run_pipeline_v2` | `pipeline_v2.py` | Three-stage extraction |
 | `extract_from_pointer` | `pointer_extract.py` | Keyword → text extraction |
+| `find_best_match` | `pointer_extract.py` | Micro-quote/keyword matching |
+| `find_tightest_keyword_window` | `pointer_extract.py` | Minimal keyword span (NEW) |
+| `expand_to_sentence_bounds` | `pointer_extract.py` | Expand span for readability (NEW) |
+| `verify_span` | `pointer_extract.py` | Post-extraction verification (NEW) |
+| `verify_and_apply_cleanup` | `pointer_extract.py` | Cleanup with guards (NEW) |
 | `deduplicate_llm` | `pipeline_v2.py` | Semantic deduplication |
 | `arrange_facts` | `pipeline_v2.py` | Theme grouping |
 | `synthesize_theme` | `pipeline_v2.py` | Per-theme prose |
+| `validate_no_new_facts` | `pipeline_v2.py` | Anti-hallucination check (NEW) |
+| `validate_section_citations` | `pipeline_v2.py` | Citation anchor validation (NEW) |
 | `render_report` | `render.py` | HTML generation |
 | `council_vote_on_brief` | `council.py` | Multi-model voting |
 | `evaluate_report` | `evaluation.py` | Post-hoc quality check |
+| `create_run_artifacts` | `artifacts.py` | Initialize run record (NEW) |
+| `save_run_artifacts` | `artifacts.py` | Persist artifacts to disk (NEW) |
+| `compute_prompt_versions` | `artifacts.py` | Hash all prompts (NEW) |
+| `diff_prompt_versions` | `artifacts.py` | Compare runs (NEW) |

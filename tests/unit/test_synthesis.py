@@ -217,15 +217,16 @@ class TestRenderReportMarkdown:
         report = synthesize_report(sample_extractions, "Test", sample_synthesis)
         output = render_report_markdown(report, use_color=True)
 
-        assert "style=" in output
-        assert "#dcfce7" in output  # Green background for verified
+        # HTML mode uses CSS classes for styling
+        assert 'class="verified-fact"' in output
+        assert 'class="synthesis"' in output
 
     def test_includes_stats_footer(self, sample_extractions, sample_synthesis):
         report = synthesize_report(sample_extractions, "Test", sample_synthesis)
         output = render_report_markdown(report, use_color=False)
 
-        assert "Verified facts:" in output
-        assert "Synthesized sections:" in output
+        assert "verified facts" in output
+        assert "AI transitions" in output
 
 
 class TestRenderReportPlain:
