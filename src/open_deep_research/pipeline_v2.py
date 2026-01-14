@@ -289,10 +289,12 @@ async def extract_batch(
     prompt = POINTER_PROMPT.format(sources=formatted, topic=topic)
 
     # Get pointers from LLM with retry
+    # Longer timeout for batched extraction (5 sources = more content to process)
     response = await retry_with_backoff(
         lambda: llm_call(prompt),
         max_retries=3,
-        base_delay=1.0
+        base_delay=1.0,
+        timeout=60.0  # 60s for extraction batches
     )
     pointers = parse_pointer_response(response)
 
