@@ -139,7 +139,7 @@ class HybridReport:
 # Stage 1: Batched Pointer Extraction
 # =============================================================================
 
-BATCH_SIZE = 1  # Process one source at a time for thoroughness
+BATCH_SIZE = 5  # Process 5 sources per batch (was 1, increased for cost efficiency)
 MAX_CHARS_PER_SOURCE = 50000  # Send full source content (models have 128k context)
 CHUNK_SIZE = 100000  # Effectively disabled - only chunk if > 100k chars
 CHUNK_THRESHOLD = 100000  # Effectively disabled - almost no sources are this large
