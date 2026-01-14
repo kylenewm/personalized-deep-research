@@ -52,6 +52,34 @@ Never rush. Never bullshit.
 
 ## Running the Pipeline (IMPORTANT)
 
+### Load Environment Variables
+
+**ALWAYS load .env before running the pipeline.** API keys are stored there.
+
+```python
+from dotenv import load_dotenv
+from pathlib import Path
+load_dotenv(Path('.env'))
+```
+
+### Correct Invocation Format
+
+**CRITICAL: Use `messages` format, NOT `research_topic`.**
+
+```python
+from langchain_core.messages import HumanMessage
+
+# CORRECT - pipeline will work
+result = await deep_researcher.ainvoke({
+    'messages': [HumanMessage(content='Your query here')]
+}, config=config)
+
+# WRONG - supervisor gets empty context, no research happens
+result = await deep_researcher.ainvoke({
+    'research_topic': 'Your query here'  # DON'T DO THIS
+}, config=config)
+```
+
 ### Bypass Review Mode
 
 The pipeline has a brief review mode that will INTERRUPT execution waiting for human input. **Always bypass it:**

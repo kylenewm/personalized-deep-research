@@ -50,7 +50,7 @@ async def retry_with_backoff(
     base_delay: float = 1.0,
     max_delay: float = 30.0,
     on_retry: callable = None,
-    timeout: float = 20.0
+    timeout: float = 45.0
 ):
     """Retry async function with exponential backoff on rate limit errors.
 
@@ -60,7 +60,7 @@ async def retry_with_backoff(
         base_delay: Initial delay in seconds (doubles each retry)
         max_delay: Maximum delay cap
         on_retry: Optional callback(attempt, delay, error) called before each retry
-        timeout: Timeout per attempt in seconds (default 20s)
+        timeout: Timeout per attempt in seconds (default 45s, was 20s which caused retry storms)
 
     Returns:
         Result of func() on success

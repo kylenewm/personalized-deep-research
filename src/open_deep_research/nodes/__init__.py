@@ -20,7 +20,7 @@ from open_deep_research.nodes.supervisor import (
     supervisor_subgraph,
     supervisor_tools,
 )
-from open_deep_research.nodes.verify import verify_claims, verify_evidence
+from open_deep_research.nodes.verify import verify_evidence
 
 __all__ = [
     # Store Gating (S02)
@@ -46,6 +46,5 @@ __all__ = [
     # Report
     "final_report_generation",
     # Verification
-    "verify_claims",
     "verify_evidence",
 ]
