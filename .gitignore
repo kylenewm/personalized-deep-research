@@ -169,5 +169,8 @@ scripts/audit_pipeline.py
 scripts/extract_fixtures.py
 scripts/prune_fixtures.py
 scripts/run_all_sandboxes.py
-scripts/test_batch_size.py
 scripts/generate_run_report.py
+
+# Internal test/iteration scripts (keep test_e2e_quick.py only)
+scripts/test_*.py
+!scripts/test_e2e_quick.py
