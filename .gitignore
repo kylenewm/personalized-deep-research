@@ -182,3 +182,6 @@ scripts/watch-changes.sh
 
 # Stale spec
 spec/
+
+# Example reports (local only)
+examples/

@@ -8,8 +8,6 @@ Research agent that extracts facts directly from source text. LLM points to cont
 
 **[Voice AI Observability: Monitoring Agentic Systems](https://kylenewm.github.io/personalized-deep-research/reports/observability_voice_agents_report.html)** — 70 verified facts across 7 themes
 
-**[Claude Code Multi-Agent Orchestration](./examples/claude_code_orchestration.html)** — 73 verified facts across 5 themes
-
 Green text = extracted verbatim from sources. Gray text = AI-written transitions.
 
 ---
