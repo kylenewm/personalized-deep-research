@@ -1,60 +1,35 @@
 # Deep Research
 
-Research agent that extracts facts directly from source text. LLM points to content, code extracts verbatim.
+Research agent with anti-hallucination architecture. The LLM never writes factual content—it points to what to extract, and code pulls verbatim text from sources.
+
+**[Example Report: Voice AI Observability](https://kylenewm.github.io/personalized-deep-research/reports/observability_voice_agents_report.html)**
+
+Green text = extracted verbatim from sources. Gray text = AI-written transitions.
 
 ---
 
-## Example Report
-
-**[Voice AI Observability: Monitoring Agentic Systems](https://kylenewm.github.io/personalized-deep-research/reports/observability_voice_agents_report.html)**
-
-
----
-
-## Core Approach
-
-```
-LLM reads source → LLM outputs keywords → Code fuzzy-matches → Verbatim extraction
-```
-
-The LLM never writes factual content. It points to what to extract, and code does the extraction.
-
-### Pipeline
+## How It Works
 
 ```
 Query
   ↓
-Research Brief → Multi-model council validation (optional)
+Research Brief (defines scope, themes)
   ↓
-Parallel Web Search (Tavily) → 20-200 sources
+Web Search (Tavily) → 20-200 sources
   ↓
-Pointer Extraction (batched)
-  │  LLM outputs: "source X, keywords: [A, B, C]"
-  │  Code fuzzy-matches → extracts actual sentences
+Pointer Extraction
+  LLM outputs keywords → Code fuzzy-matches → Verbatim extraction
   ↓
-LLM Deduplication (semantic, 0% false positive rate)
-  ↓
-Cross-batch Text Similarity (catches duplicates across batches)
+Deduplication (semantic + cross-batch)
   ↓
 Quality Filter (rejects tables, artifacts, fragments)
   ↓
-Arrangement (LLM groups by theme, excludes 40-60% redundant)
+Theme Arrangement (groups facts, excludes redundant)
   ↓
-Per-Theme Synthesis (LLM writes transitions, facts stay locked)
+Synthesis (LLM writes transitions, facts stay locked)
   ↓
-Report (HTML)
+HTML Report
 ```
-
-### Verification Layers
-
-| Layer | Method | What it catches |
-|-------|--------|-----------------|
-| Pointer extraction | Code fuzzy-match | Facts not in source |
-| Quality filter | Regex + heuristics | Table rows, markdown artifacts |
-| LLM dedup | Semantic comparison | Paraphrases and near-duplicates |
-| Cross-batch dedup | Text similarity | Duplicates across extraction batches |
-| Council validation | Multi-model voting | Fabricated names, impossible dates |
-| Citation accuracy | LLM evaluation | Claims not supported by cited fact |
 
 ---
 
@@ -69,73 +44,28 @@ source venv/bin/activate
 pip install -e .
 
 cp .env.example .env
-# Add API keys
+# Add: OPENAI_API_KEY, TAVILY_API_KEY
 ```
-
-**Required:** `OPENAI_API_KEY`, `TAVILY_API_KEY`
-
-**Optional:** `ANTHROPIC_API_KEY` (council), `LANGSMITH_API_KEY` (tracing)
 
 ---
 
 ## Usage
 
 ```bash
-# Full pipeline on a query
-python scripts/run_research.py "your research question" --sources 100
-
-# Quick test with reduced iterations
-python scripts/test_e2e_quick.py "your research question"
+python scripts/run_research.py "your research question"
 ```
-
----
-
-## Configuration
-
-Edit `src/open_deep_research/configuration.py`.
-
-### Presets
-
-| Preset | Cost | Description |
-|--------|------|-------------|
-| `fast` | ~$0.15 | 2 iterations, no councils |
-| `balanced` | ~$0.25 | Brief context, no councils |
-| `thorough` | ~$0.50 | All features except claim verification |
-
-### Key Options
-
-| Option | Default | Description |
-|--------|---------|-------------|
-| `max_researcher_iterations` | 6 | Research loops (2 in test mode) |
-| `max_total_sources` | 200 | Source cap |
-| `max_concurrent_research_units` | 5 | Parallel sub-agents |
-| `prefer_authoritative_sources` | True | Bias toward official docs |
-| `use_council` | False | Multi-model brief validation |
-| `use_safeguarded_generation` | True | Pointer extraction (recommended) |
-
----
-
-## Outputs
-
-| File | Contents |
-|------|----------|
-| `report_<timestamp>.html` | Formatted research report |
-| `run_state_<timestamp>.json` | Full pipeline state (for re-runs) |
 
 ---
 
 ## Limitations
 
-- **Search quality** — Results depend on Tavily API
-- **~6% uncited sentences** — Some synthesized text can't be traced to a specific fact
-- **API costs** — Large queries cost $1-5 (use `test_mode: true` for iteration)
-- **Match score variability** — Fuzzy matching works better with distinctive keywords
+- Search quality depends on Tavily API
+- ~6% of synthesized sentences can't be traced to a specific fact
+- Fuzzy matching works better with distinctive keywords
 
 ---
 
-## Documentation
+## Docs
 
-| Document | Contents |
-|----------|----------|
-| [ARCHITECTURE.md](./ARCHITECTURE.md) | Technical breakdown, data flow, configuration |
-| [INVARIANTS.md](./INVARIANTS.md) | System contracts and safety rules |
+- [ARCHITECTURE.md](./ARCHITECTURE.md) — Technical details, configuration options
+- [INVARIANTS.md](./INVARIANTS.md) — System contracts
