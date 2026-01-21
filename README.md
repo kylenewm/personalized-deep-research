@@ -28,7 +28,7 @@ Synthesis (LLM writes transitions, facts stay locked)
   ↓
 HTML Report
 ```
-
+For more detail: [ARCHITECTURE.md](./ARCHITECTURE.md) 
 ---
 
 ## Quick Start
@@ -53,17 +53,5 @@ cp .env.example .env
 python scripts/run_research.py "your research question"
 ```
 
----
 
-## Limitations
 
-- Search quality depends on Tavily API
-- ~6% of synthesized sentences can't be traced to a specific fact
-- Fuzzy matching works better with distinctive keywords
-
----
-
-## Docs
-
-- [ARCHITECTURE.md](./ARCHITECTURE.md) — Technical details, configuration options
-- [INVARIANTS.md](./INVARIANTS.md) — System contracts
