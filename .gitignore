@@ -149,9 +149,8 @@ scripts/test_micro_quote_only.py
 # Audit directories
 audits/
 
-# Large gold query fixtures (keep one example only)
-tests/fixtures/gold_queries/claude_code_challenges_2026.json
-tests/fixtures/gold_queries/latest_research.json
+# Large gold query fixtures (all JSON, keep README only)
+tests/fixtures/gold_queries/*.json
 
 # Multi-source search (experimental, incomplete)
 scripts/sandbox/
