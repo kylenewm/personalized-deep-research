@@ -174,3 +174,11 @@ scripts/generate_run_report.py
 # Internal test/iteration scripts (keep test_e2e_quick.py only)
 scripts/test_*.py
 !scripts/test_e2e_quick.py
+
+# Personal workspace scripts
+scripts/merge-to-base.sh
+scripts/setup-workspaces.sh
+scripts/watch-changes.sh
+
+# Stale spec
+spec/

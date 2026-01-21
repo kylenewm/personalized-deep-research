@@ -3,7 +3,6 @@
     "allow": [
       "Bash(./venv/bin/pytest *)",
       "Bash(./venv/bin/python *)",
-      "Bash(source venv/bin/activate *)",
       "Bash(ruff *)",
       "Bash(python scripts/*)",
       "Bash(git status)",
@@ -24,28 +23,6 @@
           {
             "type": "command",
             "command": "jq -r '.tool_input.file_path // empty' | { read p; [[ -n \"$p\" && $p == *.py ]] && ruff format \"$p\" 2>/dev/null; true; }"
-          }
-        ]
-      }
-    ],
-    "Stop": [
-      {
-        "matcher": ".*",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "~/.council/scripts/rich-notify.sh"
-          }
-        ]
-      }
-    ],
-    "Notification": [
-      {
-        "matcher": "",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "osascript -e 'display notification \"Claude needs attention\" with title \"Claude Code\"'"
           }
         ]
       }
