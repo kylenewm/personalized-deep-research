@@ -4,8 +4,6 @@ Research agent with anti-hallucination architecture. The LLM never writes factua
 
 **[Example Report: Voice AI Observability](https://kylenewm.github.io/personalized-deep-research/reports/observability_voice_agents_report.html)**
 
-Green text = extracted verbatim from sources. Gray text = AI-written transitions.
-
 ---
 
 ## How It Works
