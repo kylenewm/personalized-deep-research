@@ -4,7 +4,7 @@ Research agent that extracts facts directly from source text. LLM points to cont
 
 ---
 
-## Example Reports
+## Example Report
 
 **[Voice AI Observability: Monitoring Agentic Systems](https://kylenewm.github.io/personalized-deep-research/reports/observability_voice_agents_report.html)**
 
