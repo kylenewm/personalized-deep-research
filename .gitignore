@@ -68,6 +68,7 @@ test_report_output.md
 *.html
 !templates/*.html
 !examples/*.html
+!docs/reports/*.html
 report_*.md
 *_report.md
 *_report.html
@@ -128,3 +129,46 @@ AUDIT_REPORT.md
 # Working state files
 STATE.md
 LOG.md
+HANDOFF.md
+FLOWS.md
+MODULES.md
+
+# E2E test outputs
+*_e2e_*.json
+
+# Internal docs (keep locally, hide from public)
+docs/SYNTHESIS_FIRST_*.md
+docs/SOURCE_QUALITY_PROBLEMS.md
+docs/CHUNK_ID_EXTRACTION.md
+docs/EXTRACTION_EXPERIMENT_FINDINGS.md
+
+# Test scripts (experimental)
+scripts/test_keyword_matching.py
+scripts/test_micro_quote_only.py
+
+# Audit directories
+audits/
+
+# Large gold query fixtures (keep one example only)
+tests/fixtures/gold_queries/claude_code_challenges_2026.json
+tests/fixtures/gold_queries/latest_research.json
+
+# Multi-source search (experimental, incomplete)
+scripts/sandbox/
+src/open_deep_research/search/
+tests/unit/test_multi_source_integration.py
+
+# Sandbox/test run scripts (internal iteration tools)
+scripts/prompt_sandbox.py
+scripts/dedup_sandbox.py
+scripts/citation_sandbox.py
+scripts/arrangement_sandbox.py
+scripts/quality_sandbox.py
+scripts/resynthesis_test.py
+scripts/benchmark.py
+scripts/audit_pipeline.py
+scripts/extract_fixtures.py
+scripts/prune_fixtures.py
+scripts/run_all_sandboxes.py
+scripts/test_batch_size.py
+scripts/generate_run_report.py

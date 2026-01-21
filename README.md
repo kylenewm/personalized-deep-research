@@ -4,9 +4,11 @@ Research agent that extracts facts directly from source text. LLM points to cont
 
 ---
 
-## Example Output
+## Example Reports
 
-**[Claude Code Multi-Agent Orchestration Report](./examples/claude_code_orchestration.html)** — 88 sources, 73 verified facts, 5 themes
+**[Voice AI Observability: Monitoring Agentic Systems](https://kylenewm.github.io/deep-research-v0/reports/observability_voice_agents_report.html)** — 70 verified facts across 7 themes
+
+**[Claude Code Multi-Agent Orchestration](./examples/claude_code_orchestration.html)** — 73 verified facts across 5 themes
 
 Green text = extracted verbatim from sources. Gray text = AI-written transitions.
 
@@ -83,13 +85,10 @@ cp .env.example .env
 
 ```bash
 # Full pipeline on a query
+python scripts/run_research.py "your research question" --sources 100
+
+# Quick test with reduced iterations
 python scripts/test_e2e_quick.py "your research question"
-
-# Re-run synthesis on existing data (fast iteration)
-python scripts/resynthesis_test.py run_state_*.json
-
-# Run quality validation
-python scripts/run_all_sandboxes.py
 ```
 
 ---
@@ -141,8 +140,5 @@ Edit `src/open_deep_research/configuration.py`.
 
 | Document | Contents |
 |----------|----------|
-| [MODULES.md](./MODULES.md) | Complete file inventory |
-| [FLOWS.md](./FLOWS.md) | Detailed execution traces |
 | [ARCHITECTURE.md](./ARCHITECTURE.md) | Technical breakdown, data flow, configuration |
-| [STATE.md](./STATE.md) | Development status and decisions |
 | [INVARIANTS.md](./INVARIANTS.md) | System contracts and safety rules |

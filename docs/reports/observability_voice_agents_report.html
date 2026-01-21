@@ -1,0 +1,845 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Voice AI Observability: Monitoring Agentic Systems</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Source+Serif+4:opsz,wght@8..60,400;8..60,600&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --serif: 'Source Serif 4', Georgia, 'Times New Roman', serif;
+            --sans: 'Inter', -apple-system, system-ui, sans-serif;
+
+            --ink: #1a1a1a;
+            --ink-light: #4a4a4a;
+            --ink-muted: #737373;
+            --ink-faint: #a3a3a3;
+
+            --paper: #ffffff;
+            --paper-warm: #fafaf8;
+            --rule: #e5e5e5;
+            --rule-light: #f0f0f0;
+
+            --accent: #1e40af;
+            --accent-muted: #3b5998;
+            --verified: #166534;
+            --verified-bg: #f7faf8;
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        html {
+            font-size: 17px;
+            -webkit-font-smoothing: antialiased;
+        }
+
+        body {
+            font-family: var(--serif);
+            color: var(--ink);
+            background: var(--paper);
+            line-height: 1.58;
+            padding: 3rem 1.5rem 4rem;
+            max-width: 1100px;
+            margin: 0 auto;
+        }
+
+        /* =================================================================
+           Header
+           ================================================================= */
+        header {
+            margin: 0 0 2.5rem;
+            text-align: center;
+            padding-bottom: 2rem;
+            border-bottom: 1px solid var(--rule);
+        }
+
+        .overline {
+            font-family: var(--sans);
+            font-size: 0.6875rem;
+            font-weight: 600;
+            letter-spacing: 0.1em;
+            text-transform: uppercase;
+            color: var(--ink-muted);
+            margin-bottom: 0.75rem;
+        }
+
+        h1 {
+            font-family: var(--serif);
+            font-size: 2.25rem;
+            font-weight: 600;
+            line-height: 1.15;
+            letter-spacing: -0.02em;
+            color: var(--ink);
+            margin-bottom: 1.25rem;
+        }
+
+        .summary {
+            font-size: 1.125rem;
+            line-height: 1.65;
+            color: var(--ink-light);
+            max-width: 900px;
+            margin: 0 auto;
+        }
+
+        /* =================================================================
+           Two Column Layout
+           ================================================================= */
+        .columns {
+            display: grid;
+            grid-template-columns: calc(50% - 1.25rem) calc(50% - 1.25rem);
+            gap: 2.5rem;
+            margin-top: 2rem;
+        }
+
+        .column {
+            overflow-wrap: break-word;
+            word-break: break-word;
+        }
+
+        /* =================================================================
+           Section Headers
+           ================================================================= */
+        h2 {
+            font-family: var(--sans);
+            font-size: 0.6875rem;
+            font-weight: 600;
+            letter-spacing: 0.08em;
+            text-transform: uppercase;
+            color: var(--ink-muted);
+            padding-bottom: 0.625rem;
+            border-bottom: 1px solid var(--rule);
+            margin-bottom: 1.25rem;
+        }
+
+        h3 {
+            font-family: var(--serif);
+            font-size: 1.25rem;
+            font-weight: 600;
+            color: var(--ink);
+            margin: 1.75rem 0 0.625rem;
+            line-height: 1.3;
+        }
+
+        h3:first-of-type {
+            margin-top: 0;
+        }
+
+        /* =================================================================
+           Facts
+           ================================================================= */
+        .fact {
+            padding: 1rem 0;
+            border-bottom: 1px solid var(--rule-light);
+        }
+
+        .fact:last-child {
+            border-bottom: none;
+        }
+
+        .fact-text {
+            font-size: 0.9375rem;
+            line-height: 1.6;
+            color: var(--ink);
+            margin-bottom: 0.5rem;
+        }
+
+        .fact-source {
+            font-family: var(--sans);
+            font-size: 0.75rem;
+            color: var(--ink-faint);
+            display: flex;
+            align-items: center;
+            gap: 0.375rem;
+        }
+
+        .fact-source a {
+            color: var(--verified);
+            text-decoration: none;
+            font-weight: 500;
+        }
+
+        .fact-source a:hover {
+            text-decoration: underline;
+        }
+
+        .source-sep {
+            color: var(--rule);
+        }
+
+        .confidence {
+            font-size: 0.6875rem;
+            color: var(--verified);
+            font-weight: 500;
+        }
+
+        /* =================================================================
+           Synthesis Text
+           ================================================================= */
+        .synthesis {
+            font-size: 0.875rem;
+            line-height: 1.6;
+            color: var(--ink-muted);
+            font-style: italic;
+            margin: 0.5rem 0;
+        }
+
+        /* =================================================================
+           Full Width Sections
+           ================================================================= */
+        .full-width {
+            grid-column: 1 / -1;
+            margin: 2rem 0 0;
+            padding-top: 2rem;
+            border-top: 1px solid var(--rule);
+        }
+
+        .prose {
+            font-size: 1rem;
+            line-height: 1.65;
+            color: var(--ink-light);
+        }
+
+        .prose p {
+            margin-bottom: 1rem;
+        }
+
+        .prose p:last-child {
+            margin-bottom: 0;
+        }
+
+        /* =================================================================
+           Stats
+           ================================================================= */
+        .stats {
+            grid-column: 1 / -1;
+            display: flex;
+            justify-content: center;
+            gap: 3rem;
+            margin-top: 3rem;
+            padding-top: 1.5rem;
+            border-top: 1px solid var(--rule);
+        }
+
+        .stat {
+            text-align: center;
+        }
+
+        .stat-value {
+            font-family: var(--sans);
+            font-size: 1.75rem;
+            font-weight: 600;
+            color: var(--ink);
+            line-height: 1;
+        }
+
+        .stat-label {
+            font-family: var(--sans);
+            font-size: 0.625rem;
+            font-weight: 500;
+            letter-spacing: 0.05em;
+            text-transform: uppercase;
+            color: var(--ink-faint);
+            margin-top: 0.25rem;
+        }
+
+        /* =================================================================
+           Responsive
+           ================================================================= */
+        @media (max-width: 800px) {
+            .columns {
+                grid-template-columns: 1fr;
+                gap: 0;
+            }
+
+            .column + .column {
+                margin-top: 2rem;
+                padding-top: 2rem;
+                border-top: 1px solid var(--rule-light);
+            }
+
+            h1 {
+                font-size: 1.75rem;
+            }
+
+            .stats {
+                gap: 2rem;
+                flex-wrap: wrap;
+            }
+        }
+
+        @media print {
+            body {
+                padding: 1rem;
+            }
+            .columns {
+                gap: 2rem;
+            }
+            .fact {
+                break-inside: avoid;
+            }
+        }
+    
+        /* Citation links - true superscript */
+        .citation {
+            vertical-align: super;
+            font-size: 0.7em;
+            font-weight: 500;
+            color: #3b82f6;
+            text-decoration: none;
+            margin: 0 1px;
+        }
+
+        /* Prose text in sections */
+        .prose-text {
+            font-size: 1rem;
+            line-height: 1.7;
+            color: var(--ink);
+            margin-bottom: 1rem;
+        }
+
+        /* Footnotes section - contained width, 3 columns */
+        .footnotes-section {
+            margin-top: 3rem;
+            padding: 2rem 0;
+            background: var(--paper);
+            border-top: 1px solid var(--rule);
+            column-count: 3;
+            column-gap: 2rem;
+        }
+        .footnotes-section h2 {
+            column-span: all;
+            margin-bottom: 1.25rem;
+            font-size: 1.125rem;
+            font-family: var(--serif);
+            font-weight: 600;
+            color: var(--ink);
+            text-transform: none;
+            letter-spacing: normal;
+            border-bottom: none;
+            padding-bottom: 0;
+        }
+        .fn-theme {
+            font-family: var(--serif);
+            font-size: 0.9375rem;
+            font-weight: 600;
+            color: var(--ink);
+            text-transform: none;
+            letter-spacing: normal;
+            margin: 1.5rem 0 0.75rem;
+            padding-bottom: 0.5rem;
+            border-bottom: 1px solid var(--rule);
+            break-after: avoid;
+        }
+        .fn-theme:first-of-type {
+            margin-top: 0;
+        }
+        .footnote {
+            padding: 0.625rem 0;
+            border-bottom: 1px solid var(--rule-light);
+            font-size: 0.8125rem;
+            line-height: 1.5;
+            break-inside: avoid;
+        }
+        .fn-number {
+            font-family: var(--sans);
+            font-weight: 600;
+            color: var(--verified);
+            font-size: 0.75rem;
+            margin-right: 0.25rem;
+        }
+        .fn-text {
+            color: var(--ink-light);
+            display: inline;
+        }
+        .fn-meta {
+            font-family: var(--sans);
+            font-size: 0.6875rem;
+            margin-top: 0.375rem;
+            display: flex;
+            align-items: center;
+            flex-wrap: wrap;
+            gap: 0.125rem 0.375rem;
+        }
+        .fn-source {
+            font-size: 0.6875rem;
+            color: var(--verified);
+            text-decoration: none;
+            font-weight: 500;
+        }
+        .fn-source:hover {
+            text-decoration: underline;
+        }
+        .fn-domain {
+            color: var(--ink-faint);
+        }
+        .fn-sep {
+            color: var(--rule);
+        }
+
+        /* Unverified prose - subtle indicator */
+        .unverified {
+            color: var(--ink-muted);
+        }
+        .unverified::after {
+            content: " [u]";
+            font-size: 0.7em;
+            color: var(--ink-faint);
+            vertical-align: super;
+        }
+
+        /* Fix column layout */
+        .columns {
+            display: grid !important;
+            grid-template-columns: calc(50% - 1.25rem) calc(50% - 1.25rem) !important;
+            gap: 2.5rem !important;
+            margin-top: 2rem;
+            padding-top: 2rem;
+            border-top: 1px solid var(--rule);
+        }
+
+        .column {
+            overflow-wrap: break-word;
+            word-wrap: break-word;
+            word-break: break-word;
+        }
+
+        .prose-text {
+            overflow-wrap: break-word !important;
+            word-break: break-word !important;
+        }
+
+        @media (max-width: 1200px) {
+            .footnotes-section {
+                column-count: 2;
+            }
+        }
+        @media (max-width: 800px) {
+            .footnotes-section {
+                column-count: 1;
+                padding: 2rem 1.5rem;
+            }
+        }
+    </style>
+</head>
+<body>
+
+<header>
+    <p class="overline">Research Report</p>
+    <h1>Voice AI Observability: Monitoring Agentic Systems</h1>
+    <p class="summary">This report identifies a comprehensive set of observability and monitoring techniques essential for optimizing voice AI agents and agentic systems in 2025-2026. Key findings highlight the critical role of trace propagation and distributed tracing in managing complex multi-agent workflows, alongside advanced latency profiling methods that pinpoint bottlenecks within real-time voice pipelines. Instrumentation of LLM calls—including detailed token usage, prompt/completion logging, and cost tracking—emerges as a vital practice for transparency and efficiency, complemented by robust agent state observability focusing on context window utilization, memory, and tool call patterns. Additionally, the report underscores the importance of evaluation frameworks tailored to measure agent accuracy and hallucination rates, while production debugging techniques address voice interruptions and turn-taking challenges. Modern observability stacks such as OpenTelemetry, LangSmith, and Arize, combined with custom solutions, provide scalable and effective implementation patterns widely adopted in production environments.</p>
+</header>
+
+<div class="columns">
+
+    <div class="column">
+        <h2>Key Findings</h2>
+<h3>Trace Propagation and Distributed Tracing for Multi-Agent Workflows</h3>
+<p class="prose-text"><span class="unverified">Effective observability and monitoring of voice AI agents and agentic systems in late 2025 and 2026 increasingly rely on robust trace propagation and distributed tracing frameworks that capture the complexity of multi-agent workflows.</span> Given that a single user request can trigger 15 or more LLM calls spanning multiple chains, models, and tools—including embedding generation and tool invocations—achieving multi-step execution transparency is critical for debugging and performance optimization<sup><a href="#fn1" class="citation">[1]</a></sup><sup><a href="#fn2" class="citation">[2]</a></sup>. Distributed tracing structured hierarchically across session (user journey), trace (agent workflow), and span (step-level action) levels forms the backbone of this observability, enabling detailed capture of prompts, variables, tool calls, and intermediate states<sup><a href="#fn5" class="citation">[5]</a></sup><sup><a href="#fn6" class="citation">[6]</a></sup><sup><a href="#fn7" class="citation">[7]</a></sup>. OpenTelemetry (OTel) has emerged as a foundational technology in this space, providing standardized trace context propagation through W3C Trace Context HTTP headers and supporting auto-instrumentation for popular frameworks and libraries, which facilitates seamless context propagation across distributed services<sup><a href="#fn3" class="citation">[3]</a></sup><sup><a href="#fn4" class="citation">[4]</a></sup>. Furthermore, the integration of OpenLLMetry semantic conventions into OpenTelemetry enhances the ability to semantically annotate LLM-specific data, making traces a standardized and rich source of information for LLM application monitoring<sup><a href="#fn8" class="citation">[8]</a></sup><sup><a href="#fn9" class="citation">[9]</a></sup>. <span class="unverified">Latency profiling and bottleneck detection in real-time voice pipelines benefit significantly from these distributed tracing capabilities, as they allow pinpointing of delays and errors within complex multi-turn conversations and agent workflows.</span> Modern observability platforms not only trace LLM calls and tool invocations comprehensively but also enable rapid error localization, reducing troubleshooting time from hours to minutes<sup><a href="#fn10" class="citation">[10]</a></sup><sup><a href="#fn11" class="citation">[11]</a></sup>. <span class="unverified">Instrumentation patterns that consistently capture token usage, prompt and completion logging, and cost tracking at the span level are essential for monitoring LLM call efficiency and financial impact.</span> Additionally, agent state observability—covering context window usage, memory utilization, and tool call patterns—provides critical insights into runtime behavior and resource constraints, informing both performance tuning and hallucination mitigation strategies<sup><a href="#fn7" class="citation">[7]</a></sup>. Production debugging techniques specifically address voice interruptions and turn-taking issues by leveraging layered evaluations and anomaly detection integrated into the observability stack, ensuring smooth conversational flow and agent accuracy<sup><a href="#fn5" class="citation">[5]</a></sup><sup><a href="#fn12" class="citation">[12]</a></sup>. Leading platforms such as Langfuse and Arize AI exemplify the state-of-the-art in agentic system observability by combining open-source tracing with comprehensive session tracking, simulation, and real-time evaluation capabilities<sup><a href="#fn13" class="citation">[13]</a></sup><sup><a href="#fn14" class="citation">[14]</a></sup>. Langfuse offers detailed session-level observability that supports end-to-end tracing of agent workflows, while Arize extends ML observability paradigms to detect drift and anomalies in agentic systems, facilitating proactive issue resolution<sup><a href="#fn14" class="citation">[14]</a></sup>. <span class="unverified">These solutions integrate distributed tracing, automated evaluations, and alerting mechanisms to maintain high reliability and accuracy in production voice AI deployments.</span> Overall, the convergence of standardized distributed tracing hierarchies, semantic conventions for LLM data, and advanced evaluation frameworks is shaping a new generation of observability stacks that address the unique challenges of multi-agent voice AI workflows in real time<sup><a href="#fn5" class="citation">[5]</a></sup><sup><a href="#fn6" class="citation">[6]</a></sup><sup><a href="#fn9" class="citation">[9]</a></sup><sup><a href="#fn12" class="citation">[12]</a></sup>.</p>
+<h3>Agent State Observability: Context Window Usage, Memory Utilization, Tool Call Patterns</h3>
+<p class="prose-text"><span class="unverified">Effective observability of voice AI agents and agentic systems in late 2025 and 2026 hinges on comprehensive trace propagation and distributed tracing techniques that can capture the complexity of multi-agent workflows.</span> Given that a single session may involve nested model calls, external APIs, and dynamically shifting reasoning chains, observability solutions must track these interwoven processes end-to-end to provide actionable insights<sup><a href="#fn48" class="citation">[48]</a></sup>. This complexity is compounded by the fact that a single user query can trigger dozens or even hundreds of intermediate steps, including LLM calls, tool executions, and retrievals, each representing a potential point of failure or performance degradation<sup><a href="#fn49" class="citation">[49]</a></sup>. Without robust distributed tracing, integration failures cascade silently through these multi-step workflows, creating compound errors that remain invisible when monitoring individual components in isolation<sup><a href="#fn50" class="citation">[50]</a></sup>. <span class="unverified">Therefore, modern observability stacks increasingly emphasize holistic trace correlation and context propagation to maintain visibility across the entire agent lifecycle.</span> <span class="unverified">In parallel, latency profiling and bottleneck detection remain critical for real-time voice pipelines, where delays directly impact user experience.</span> Production systems implement fine-grained instrumentation of LLM calls, capturing token usage, prompt and completion logging, and cost tracking to not only optimize performance but also control operational expenses<sup><a href="#fn52" class="citation">[52]</a></sup>. <span class="unverified">Agent state observability extends beyond raw outputs to include context window usage, memory utilization, and tool call patterns, as these internal states influence both accuracy and responsiveness.</span> Microsoft Azure research underscores the importance of tracking reasoning processes and tool selection decisions across multi-agent setups to fully understand agent behavior and diagnose logical errors, which are the predominant failure mode rather than technical crashes<sup><a href="#fn51" class="citation">[51]</a></sup><sup><a href="#fn53" class="citation">[53]</a></sup>. <span class="unverified">This nuanced monitoring enables teams to detect drift, hallucinations, and other subtle degradations that traditional metrics might miss.</span> <span class="unverified">Evaluation frameworks designed for voice AI agents integrate these observability signals to measure accuracy and hallucination rates systematically.</span> <span class="unverified">They leverage detailed logs and telemetry to correlate agent decisions with downstream outcomes, facilitating targeted debugging of voice interruptions and turn-taking issues in production environments.</span> Contemporary observability solutions such as OpenTelemetry, LangSmith, and Arize provide extensible platforms that support this multi-dimensional monitoring, combining system health metrics (availability, latency, dependencies) with agent behavior indicators (accuracy, drift, cost)<sup><a href="#fn52" class="citation">[52]</a></sup>. <span class="unverified">Custom instrumentation patterns often augment these stacks to capture domain-specific nuances, ensuring that monitoring remains aligned with evolving agent architectures and workflows.</span> <span class="unverified">Collectively, these techniques form a robust foundation for maintaining reliability and transparency in increasingly complex voice AI systems.</span></p>
+<h3>Evaluation Frameworks for Measuring Agent Accuracy and Hallucination Rates</h3>
+<p class="prose-text"><span class="unverified">Effective evaluation frameworks for measuring agent accuracy and hallucination rates in voice AI agents increasingly rely on comprehensive observability and monitoring techniques that span multi-agent workflows.</span> Given that a single user request often triggers multiple chains and models, detailed trace propagation and distributed tracing are essential to maintain visibility into each step of the process, enabling quality evaluation beyond simple metrics<sup><a href="#fn54" class="citation">[54]</a></sup>. Modern observability stacks such as OpenTelemetry, LangSmith, and Arize facilitate this by integrating real-time production logging, automated quality checks, and alerting mechanisms, which are critical for identifying and addressing errors promptly<sup><a href="#fn57" class="citation">[57]</a></sup>. These tools also support LLM call instrumentation, capturing token usage, prompt and completion logs, and cost tracking, thereby providing granular insights into model behavior and resource consumption<sup><a href="#fn58" class="citation">[58]</a></sup>. <span class="unverified">Latency profiling and bottleneck detection in real-time voice pipelines remain crucial for maintaining seamless user experiences.</span> <span class="unverified">By instrumenting agent state observability—including context window usage, memory utilization, and tool call patterns—production systems can pinpoint performance degradations and optimize throughput.</span> Semantic conventions for AI agent observability standardize these metrics, ensuring consistency across distributed systems and enabling more effective debugging of voice interruptions and turn-taking issues<sup><a href="#fn55" class="citation">[55]</a></sup>. Furthermore, specialized monitoring solutions like AgentOps offer lightweight, scalable oversight for hundreds of agents, while Galileo’s Luna guard models focus on hallucination detection and drift monitoring, directly addressing common failure modes in generative AI systems<sup><a href="#fn59" class="citation">[59]</a></sup><sup><a href="#fn58" class="citation">[58]</a></sup>. The importance of systematic evaluation frameworks is underscored by research from Stanford’s Center for Research on Foundation Models, which demonstrates that rigorous evaluation protocols can reduce production failures by up to 60%<sup><a href="#fn56" class="citation">[56]</a></sup>. This is exemplified by datasets such as the 500 human-recorded telecom questions derived from RFCs, which simulate real-world agent queries and provide a robust benchmark for accuracy and hallucination measurement<sup><a href="#fn60" class="citation">[60]</a></sup>. <span class="unverified">Integrating these datasets with observability tools enables continuous feedback loops that refine agent performance and reduce hallucinations, ultimately enhancing reliability in complex voice AI deployments.</span></p>
+<h3>Modern Observability Stacks (OpenTelemetry, LangSmith, Arize, Custom Solutions)</h3>
+<p class="prose-text"><span class="unverified">Modern observability stacks for voice AI agents and agentic systems in late 2025-2026 emphasize comprehensive trace propagation and distributed tracing to capture complex multi-agent workflows effectively.</span> LangSmith, emerging in 2023 and widely adopted by companies like Klarna and Elastic by late 2025, exemplifies this trend by providing developer-centric agent tracing with minimal overhead, making it suitable for performance-critical production environments<sup><a href="#fn65" class="citation">[65]</a></sup><sup><a href="#fn66" class="citation">[66]</a></sup><sup><a href="#fn69" class="citation">[69]</a></sup>. Its integration with OpenTelemetry and SDKs in Python and TypeScript allows seamless instrumentation of LLM calls, including token usage, prompt/completion logging, and cost tracking, which are essential for detailed latency profiling and bottleneck detection in real-time voice pipelines<sup><a href="#fn70" class="citation">[70]</a></sup>. Similarly, Laminar offers low overhead (around 5%), balancing observability depth with production performance demands, while solutions like AgentOps and Langfuse present moderate overheads (12-15%), representing reasonable trade-offs for richer feature sets<sup><a href="#fn67" class="citation">[67]</a></sup><sup><a href="#fn68" class="citation">[68]</a></sup>. <span class="unverified">Latency profiling and bottleneck detection in voice AI pipelines benefit from tight coupling of LLM performance metrics with infrastructure and service-level telemetry.</span> Datadog’s LLM Observability, for instance, integrates local-first tracing and offline evaluation capabilities with rich visual analysis inside notebooks, enabling enterprises to correlate latency spikes and voice interruptions directly with underlying system metrics<sup><a href="#fn63" class="citation">[63]</a></sup><sup><a href="#fn64" class="citation">[64]</a></sup>. <span class="unverified">This approach supports production debugging techniques for common issues such as voice interruptions and turn-taking problems by providing granular visibility into agent state observability, including context window usage, memory utilization, and tool call patterns.</span> Arize AI extends this paradigm by focusing on enterprise-grade ML observability with a strong emphasis on lifecycle management and evaluation frameworks that measure agent accuracy and hallucination rates, critical for maintaining trustworthiness in voice AI deployments<sup><a href="#fn62" class="citation">[62]</a></sup><sup><a href="#fn69" class="citation">[69]</a></sup>. <span class="unverified">Cost tracking and experiment management are increasingly integrated into observability stacks to optimize resource utilization and model efficiency.</span> Tools like W&B Weave, favored by ML teams already using Weights & Biases, automate logging and experiment tracking while tying LLM call instrumentation directly to cost metrics, enabling continuous optimization of voice AI agents<sup><a href="#fn64" class="citation">[64]</a></sup>. Open-source and self-hostable solutions such as Arize Phoenix cater to teams requiring strong tracing capabilities combined with collaboration features in retrieval-augmented generation (RAG) heavy applications, highlighting the diversity of observability needs across different deployment scenarios<sup><a href="#fn62" class="citation">[62]</a></sup>. <span class="unverified">Overall, the landscape in 2025-2026 reflects a maturing ecosystem where modern observability stacks combine distributed tracing, latency profiling, agent state monitoring, and evaluation frameworks into cohesive platforms that support both real-time debugging and long-term performance optimization for voice AI agents.</span></p>
+    </div>
+
+    <div class="column">
+        <h2 style="visibility:hidden">Key Findings</h2>
+<h3>Latency Profiling and Bottleneck Detection in Real-Time Voice Pipelines</h3>
+<p class="prose-text"><span class="unverified">Latency profiling and bottleneck detection in real-time voice AI pipelines have become critical as conversational agents strive to meet stringent responsiveness requirements.</span> Current production systems demonstrate that sub-200 millisecond end-to-end latency for full-duplex speech-to-speech interactions is achievable on a single consumer GPU, such as the L40S, enabling real-time multilingual support across over 100 languages<sup><a href="#fn15" class="citation">[15]</a></sup><sup><a href="#fn16" class="citation">[16]</a></sup><sup><a href="#fn17" class="citation">[17]</a></sup>. This performance aligns with human conversational constraints, where response windows of 300 to 500 milliseconds are necessary to maintain natural dialogue flow, and latencies exceeding 800 milliseconds risk losing user engagement altogether<sup><a href="#fn18" class="citation">[18]</a></sup><sup><a href="#fn22" class="citation">[22]</a></sup><sup><a href="#fn27" class="citation">[27]</a></sup>. Detailed latency breakdowns reveal that automatic speech recognition (ASR), large language model (LLM) inference, and text-to-speech (TTS) synthesis each contribute distinct delays, typically ranging from 100–500 ms for STT, 350 ms to over 1 second for LLM processing, and 75–200 ms for TTS, underscoring the importance of fine-grained instrumentation across pipeline stages<sup><a href="#fn26" class="citation">[26]</a></sup><sup><a href="#fn28" class="citation">[28]</a></sup>. <span class="unverified">To effectively monitor and diagnose latency bottlenecks in multi-agent voice workflows, distributed tracing and trace propagation have emerged as indispensable observability techniques.</span> Capturing streaming WebSocket timestamps and correlating token-level LLM call metrics—such as prompt and completion logging, token usage, and cost tracking—enables precise identification of slow components and cost hotspots in real time<sup><a href="#fn19" class="citation">[19]</a></sup>. <span class="unverified">Agent state observability further enhances this by tracking context window utilization, memory consumption, and tool invocation patterns, which are crucial for understanding agent behavior and performance degradation under load.</span> Modern observability stacks, including OpenTelemetry for distributed tracing, LangSmith for LLM instrumentation, and Arize for model monitoring, provide comprehensive frameworks to implement these patterns at scale, often integrated with custom solutions tailored to voice AI pipelines<sup><a href="#fn20" class="citation">[20]</a></sup><sup><a href="#fn21" class="citation">[21]</a></sup>. <span class="unverified">Production debugging techniques specifically target issues like voice interruptions and turn-taking anomalies, which can arise from latency spikes or synchronization errors between pipeline components.</span> Metrics such as Time to First Audio (TTFA)—the interval between user speech end and agent speech start—serve as key indicators of conversational fluidity, with best-in-class systems achieving TTFA well below 300 ms to avoid unnatural pauses that degrade user experience<sup><a href="#fn20" class="citation">[20]</a></sup><sup><a href="#fn21" class="citation">[21]</a></sup><sup><a href="#fn25" class="citation">[25]</a></sup>. <span class="unverified">Additionally, evaluation frameworks that measure agent accuracy and hallucination rates complement latency profiling by ensuring that speed improvements do not compromise response quality.</span> Real-time factors (RTF) below 1.0, achieved through concurrent processing and vector-based retrieval optimizations, further support enterprise-grade, low-latency deployments in telecom and other latency-sensitive domains<sup><a href="#fn23" class="citation">[23]</a></sup><sup><a href="#fn24" class="citation">[24]</a></sup>. <span class="unverified">Collectively, these observability and monitoring techniques form the backbone of robust, scalable voice AI systems capable of delivering natural, cost-effective, and responsive interactions in late 2025 and beyond.</span></p>
+<h3>LLM Call Instrumentation: Token Usage, Prompt/Completion Logging, Cost Tracking</h3>
+<p class="prose-text"><span class="unverified">Effective observability and monitoring of voice AI agents and agentic systems in the late 2025-2026 landscape hinge critically on comprehensive LLM call instrumentation, which encompasses token usage tracking, prompt and completion logging, and precise cost attribution.</span> Token usage remains the primary unit of cost measurement, and accurate attribution of tokens to individual calls or users is essential for operational efficiency and cost control<sup><a href="#fn36" class="citation">[36]</a></sup><sup><a href="#fn41" class="citation">[41]</a></sup>. Production systems commonly implement metadata tagging with every API request to enable granular cost tracking per user, facilitating real-time cost optimization and billing accuracy<sup><a href="#fn37" class="citation">[37]</a></sup>. Beyond cost, detailed logging of prompts and completions, including chat history and request parameters, provides the necessary context for debugging and performance analysis, supporting both redaction and privacy compliance<sup><a href="#fn34" class="citation">[34]</a></sup><sup><a href="#fn43" class="citation">[43]</a></sup>. Observability platforms now extend their capabilities to track latency, token usage, hallucination rates, and reasoning paths, enabling a holistic view of model behavior and quality<sup><a href="#fn32" class="citation">[32]</a></sup><sup><a href="#fn39" class="citation">[39]</a></sup>. Trace propagation and distributed tracing have become foundational for managing complex multi-agent workflows, where tool call logs capture invocation timing, arguments, and outputs across thousands of integrated tools, supporting detailed analysis of agent state and tool usage patterns<sup><a href="#fn33" class="citation">[33]</a></sup><sup><a href="#fn35" class="citation">[35]</a></sup>. Latency profiling is especially critical in real-time voice pipelines, where response times vary significantly based on input complexity and model selection, necessitating continuous monitoring to detect bottlenecks and optimize user experience<sup><a href="#fn44" class="citation">[44]</a></sup><sup><a href="#fn38" class="citation">[38]</a></sup>. Modern observability stacks leverage OpenTelemetry and specialized AI observability platforms such as LangSmith and Arize, integrating automated evaluations, drift detection, and alerting mechanisms to accelerate diagnosis and maintain system reliability<sup><a href="#fn42" class="citation">[42]</a></sup>. <span class="unverified">These frameworks also track agent state observability metrics, including context window utilization, memory consumption, and tool call frequency, which are vital for understanding agent behavior and preventing performance degradation.</span> <span class="unverified">In production environments, debugging techniques focus on addressing voice-specific challenges such as interruptions and turn-taking issues, which require correlating voice pipeline metrics with LLM call data to isolate latency spikes or token overuse that may cause conversational breakdowns.</span> The integration of out-of-the-box LLM tracing solutions, including eBPF-based tracing available in recent sensor versions, enables capturing full payloads and token counts with minimal overhead, enhancing observability without compromising performance<sup><a href="#fn40" class="citation">[40]</a></sup><sup><a href="#fn43" class="citation">[43]</a></sup>. Aggregated daily usage and cost metrics complement real-time monitoring by providing historical insights that inform model selection and caching strategies, further optimizing cost and efficiency<sup><a href="#fn31" class="citation">[31]</a></sup><sup><a href="#fn45" class="citation">[45]</a></sup>. <span class="unverified">Together, these observability and monitoring techniques form a robust framework that supports scalable, cost-effective, and high-quality voice AI agent deployments in complex, multi-agent ecosystems.</span></p>
+<h3>Production Debugging Techniques for Voice Interruptions and Turn-Taking Issues</h3>
+<p class="prose-text"><span class="unverified">Effective production debugging of voice interruptions and turn-taking issues in voice AI agents increasingly relies on comprehensive observability frameworks that integrate trace propagation and distributed tracing across multi-agent workflows.</span> <span class="unverified">These techniques enable detailed tracking of conversational state transitions and asynchronous tool calls, which are critical for diagnosing where interruptions or turn-taking failures occur in complex agentic systems.</span> <span class="unverified">Modern observability stacks such as OpenTelemetry facilitate this by capturing end-to-end traces that correlate user speech endpoints with downstream LLM invocations and tool executions, providing granular visibility into latency spikes and context handoffs.</span> Latency profiling within these pipelines is particularly vital, as the human conversational standard for response time—from user speech completion to AI response—is tightly constrained, often targeting sub-200ms thresholds to maintain natural interaction flow<sup><a href="#fn61" class="citation">[61]</a></sup>. <span class="unverified">Bottleneck detection tools leverage these traces to isolate slow components, whether in ASR, intent recognition, or LLM inference stages, enabling targeted optimizations.</span> <span class="unverified">Instrumentation of LLM calls has become a cornerstone of monitoring agentic voice systems, with detailed logging of token usage, prompt and completion content, and cost metrics informing both performance tuning and budget management.</span> <span class="unverified">This telemetry supports evaluation frameworks designed to measure agent accuracy and hallucination rates by correlating output quality with input context and model state.</span> <span class="unverified">Agent state observability extends beyond raw performance metrics to include monitoring of context window utilization, memory footprint, and tool call patterns, which collectively influence the agent’s ability to maintain coherent turn-taking and avoid interruptions.</span> <span class="unverified">For example, tracking context window saturation can preempt hallucination spikes or response truncations, while tool call frequency analysis reveals potential overuse or misfires that disrupt conversational flow.</span> <span class="unverified">Platforms like LangSmith and Arize provide specialized tooling for these observability needs, offering customizable dashboards and alerting mechanisms tailored to voice AI workflows.</span> <span class="unverified">Production debugging techniques for voice interruptions and turn-taking issues also integrate real-time latency profiling with distributed tracing data to pinpoint temporal mismatches and concurrency conflicts.</span> <span class="unverified">By correlating voice pipeline latency metrics with agent state changes and LLM call instrumentation, engineers can identify subtle causes of premature cut-offs or overlapping speech segments.</span> <span class="unverified">Custom solutions often augment open-source observability stacks with domain-specific heuristics that detect anomalies in turn-taking behavior, such as unexpected silence durations or rapid-fire tool invocations.</span> <span class="unverified">These combined approaches ensure that debugging is both reactive—addressing incidents as they arise—and proactive, by continuously monitoring key indicators like response latency, token consumption, and context window health.</span> This holistic observability strategy is essential for maintaining seamless, human-like conversational dynamics in voice AI agents operating at scale<sup><a href="#fn61" class="citation">[61]</a></sup>.</p>
+    </div>
+
+    <!-- Analysis and Conclusion hidden for now - AI content without citations
+    <div class="full-width">
+        <h2>Analysis</h2>
+        <div class="prose">
+            <p>The convergence of advanced observability techniques and real-time performance metrics for voice AI agents and agentic systems in late 2025-2026 reveals a nuanced ecosystem where traceability, latency, cost, and accuracy are deeply intertwined. Distributed tracing frameworks like OpenTelemetry have become foundational in managing the complexity of multi-agent workflows, where a single user request can trigger 15 or more LLM calls spanning embeddings, retrievals, and tool invocations. This trace propagation is critical not only for end-to-end transparency but also for correlating latency spikes and failure cascades across nested calls and external APIs. When combined with detailed LLM call instrumentation—tracking token usage, prompt/completion logs, and cost metrics—teams gain a holistic view that links operational efficiency directly to user experience outcomes. For example, understanding that a full-duplex speech-to-speech pipeline can run sub-200 ms on a single L40S GPU contextualizes how latency profiling dovetails with cost optimization, enabling deployments under $0.02 per minute without sacrificing responsiveness.</p>
+<p>This synthesis highlights that latency and observability are not isolated concerns but part of a feedback loop where instrumentation data informs bottleneck detection and cost management. The reported 195 ms end-to-end latency for open-source speech-to-speech systems is a practical benchmark that signals near-human conversational speeds, critical for turn-taking and voice interruption debugging. The ability to measure voice agent response times against human conversational norms provides actionable thresholds for production debugging, where even small delays can degrade user experience. Moreover, the granular visibility into agent state—such as context window usage and memory utilization—enables teams to detect subtle inefficiencies or integration failures that cascade through multi-step workflows, often invisible without comprehensive trace correlation. This is especially important given that a single user query can spawn hundreds of intermediate reasoning steps, making traditional monitoring insufficient.</p>
+<p>From a cost-performance perspective, the integration of token-level instrumentation and prompt logging with distributed tracing allows for precise cost attribution and model selection strategies, which are crucial given the thousands of tools and dozens of MCP connectors involved in complex agentic systems. The ability to track hallucination rates alongside token usage and latency provides a multi-dimensional evaluation framework that goes beyond raw accuracy metrics. Stanford’s research showing a 60% reduction in production failures through systematic evaluation underscores the value of embedding quality metrics within observability stacks. Platforms like LangSmith and Arize Phoenix exemplify this trend by offering hybrid solutions that combine open-source flexibility with rich visual analytics and offline evaluation capabilities, catering to both local-first and enterprise-scale needs.</p>
+<p>However, these advances come with inherent tradeoffs. Achieving sub-200 ms latency on consumer-grade GPUs often requires significant engineering investment in pipeline optimization and model pruning, which may limit flexibility or increase complexity. Similarly, while OpenTelemetry’s W3C Trace Context headers enable standardized trace propagation, the overhead of maintaining detailed token-level logs and tool call patterns can inflate storage and processing costs, challenging scalability. Teams must balance the simplicity of turnkey SaaS observability platforms like Datadog LLM Observability against the customization and cost control offered by self-hosted stacks. Furthermore, the tension between cost efficiency and model accuracy is amplified in multi-agent workflows, where aggressive caching or model selection to reduce token usage might inadvertently increase hallucination rates or degrade conversational naturalness. Ultimately, the most effective observability and monitoring strategies in late 2025-2026 are those that integrate distributed tracing, latency profiling, and evaluation frameworks into a cohesive system that supports iterative optimization across performance, cost, and user experience dimensions.</p>
+        </div>
+    </div>
+
+    <div class="full-width" style="margin-top: 0; border-top: none; padding-top: 1.5rem;">
+        <h2>Conclusion</h2>
+        <div class="prose">
+            <p>In late 2025-2026, effective observability and monitoring of voice AI agents and agentic systems rely heavily on comprehensive trace propagation and distributed tracing to manage complex multi-agent workflows, alongside detailed latency profiling to identify bottlenecks in real-time voice pipelines. Instrumentation of LLM calls—including token usage, prompt and completion logging, and cost tracking—combined with agent state observability metrics such as context window utilization and tool call patterns, provide critical insights for maintaining system performance and accuracy. Production systems increasingly integrate modern observability stacks like OpenTelemetry, LangSmith, and Arize, supported by robust evaluation frameworks and targeted debugging techniques to address voice interruptions and turn-taking challenges, ensuring reliable and transparent agent behavior.</p>
+        </div>
+    </div>
+    -->
+
+</div>
+
+<div class="footnotes-section">
+<h2>Sources & Evidence</h2>
+<h4 class="fn-theme">Trace Propagation and Distributed Tracing for Multi-Agent Workflows</h4>
+<div class="footnote" id="fn1">
+<span class="fn-number">[1]</span>
+<span class="fn-text">Modern observability platforms must address challenges including: **Multi-step execution transparency**: Agents may execute 15+ LLM calls across</span>
+<div class="fn-meta"><a href="https://www.getmaxim.ai/articles/top-5-ai-agent-observability-platforms-in-2026/" target="_blank" rel="noopener" class="fn-source">getmaxim.ai</a></div>
+</div>
+<div class="footnote" id="fn2">
+<span class="fn-number">[2]</span>
+<span class="fn-text">A single user request might trigger 15+ LLM calls across multiple chains, models, and tools, creating execution paths that span embedding generation,</span>
+<div class="fn-meta"><a href="https://dev.to/kuldeep_paul/top-5-ai-observability-platforms-in-2025-4216" target="_blank" rel="noopener" class="fn-source">dev.to</a></div>
+</div>
+<div class="footnote" id="fn3">
+<span class="fn-number">[3]</span>
+<span class="fn-text">OpenTelemetry provides a text-based approach to propagate context to remote services using the W3C Trace Context HTTP headers.</span>
+<div class="fn-meta"><a href="https://opentelemetry.io/docs/languages/php/propagation/" target="_blank" rel="noopener" class="fn-source">opentelemetry.io</a></div>
+</div>
+<div class="footnote" id="fn4">
+<span class="fn-number">[4]</span>
+<span class="fn-text">Automatic context propagation Auto-instrumentation exists for some of the most popular frameworks, libraries, and PHP extensions.</span>
+<div class="fn-meta"><a href="https://opentelemetry.io/docs/languages/php/propagation/" target="_blank" rel="noopener" class="fn-source">opentelemetry.io</a></div>
+</div>
+<div class="footnote" id="fn5">
+<span class="fn-number">[5]</span>
+<span class="fn-text">Robust observability requires standardized distributed tracing across session → trace → span, layered evaluations (deterministic, statistical,</span>
+<div class="fn-meta"><a href="https://medium.com/@kamyashah2018/debugging-complex-multi-agent-systems-best-practices-for-observability-a523fbfa8f99" target="_blank" rel="noopener" class="fn-source">medium.com</a></div>
+</div>
+<div class="footnote" id="fn6">
+<span class="fn-number">[6]</span>
+<span class="fn-text">Standardize Distributed Tracing Across Session → Trace → Span Distributed tracing is the backbone of agent debugging.</span>
+<div class="fn-meta"><a href="https://medium.com/@kamyashah2018/debugging-complex-multi-agent-systems-best-practices-for-observability-a523fbfa8f99" target="_blank" rel="noopener" class="fn-source">medium.com</a></div>
+</div>
+<div class="footnote" id="fn7">
+<span class="fn-number">[7]</span>
+<span class="fn-text">Instrument a consistent hierarchy — session (user journey), trace (agent workflow), span (step-level action) — and capture prompts, variables, tool</span>
+<div class="fn-meta"><a href="https://medium.com/@kamyashah2018/debugging-complex-multi-agent-systems-best-practices-for-observability-a523fbfa8f99" target="_blank" rel="noopener" class="fn-source">medium.com</a></div>
+</div>
+<div class="footnote" id="fn8">
+<span class="fn-number">[8]</span>
+<span class="fn-text">OTel is geared towards general observability, and **traces are a great standardized way to capture LLM application data** – we have recorded a webinar</span>
+<div class="fn-meta"><a href="https://langfuse.com/blog/2024-10-opentelemetry-for-llm-observability" target="_blank" rel="noopener" class="fn-source">langfuse.com</a></div>
+</div>
+<div class="footnote" id="fn9">
+<span class="fn-number">[9]</span>
+<span class="fn-text">thrilled to announce that the OpenLLMetry semantic conventions have officially become part of OpenTelemetry!</span>
+<div class="fn-meta"><a href="https://community.dynatrace.com/t5/AI-Observability/OpenLLMetry-semantic-conventions-are-now-part-of-OpenTelemetry/m-p/267984" target="_blank" rel="noopener" class="fn-source">community.dynatrace.com</a></div>
+</div>
+<div class="footnote" id="fn10">
+<span class="fn-number">[10]</span>
+<span class="fn-text">Key differentiators include: **Comprehensive Tracing:** Ability to trace LLM calls, agent workflows, tool calls, and multi-turn conversations in</span>
+<div class="fn-meta"><a href="https://www.getmaxim.ai/articles/top-5-ai-observability-tools-in-2025-a-comprehensive-guide/" target="_blank" rel="noopener" class="fn-source">getmaxim.ai</a></div>
+</div>
+<div class="footnote" id="fn11">
+<span class="fn-number">[11]</span>
+<span class="fn-text">It traces errors back to their source in minutes, not hours.</span>
+<div class="fn-meta"><a href="https://www.montecarlodata.com/blog-best-ai-observability-tools/" target="_blank" rel="noopener" class="fn-source">montecarlodata.com</a></div>
+</div>
+<div class="footnote" id="fn12">
+<span class="fn-number">[12]</span>
+<span class="fn-text">Effective monitoring platforms provide distributed tracing, automated evaluations, anomaly detection, and alerting to ensure AI applications remain</span>
+<div class="fn-meta"><a href="https://www.getmaxim.ai/articles/top-5-tools-for-monitoring-llm-applications-in-2025/" target="_blank" rel="noopener" class="fn-source">getmaxim.ai</a></div>
+</div>
+<div class="footnote" id="fn13">
+<span class="fn-number">[13]</span>
+<span class="fn-text">Five leading platforms address these challenges: **Maxim AI** provides end-to-end agent observability with simulation, evaluation, and real-time</span>
+<div class="fn-meta"><a href="https://www.getmaxim.ai/articles/top-5-tools-for-monitoring-and-improving-ai-agent-reliability-2026/" target="_blank" rel="noopener" class="fn-source">getmaxim.ai</a></div>
+</div>
+<div class="footnote" id="fn14">
+<span class="fn-number">[14]</span>
+<span class="fn-text">debugging. **Langfuse** offers open-source tracing with comprehensive session tracking. **Arize AI** extends ML observability to agentic systems with</span>
+<div class="fn-meta"><a href="https://www.getmaxim.ai/articles/top-5-tools-for-monitoring-and-improving-ai-agent-reliability-2026/" target="_blank" rel="noopener" class="fn-source">getmaxim.ai</a></div>
+</div>
+<h4 class="fn-theme">Latency Profiling and Bottleneck Detection in Real-Time Voice Pipelines</h4>
+<div class="footnote" id="fn15">
+<span class="fn-number">[15]</span>
+<span class="fn-text">self-hosted stacks under $0.02/min Open-source full-duplex agents now run at sub-200 ms end-to-end on a single consumer GPU and sound</span>
+<div class="fn-meta"><a href="https://medium.com/@mshojaei77/voice-ai-voice-agents-the-definitive-2025-state-of-the-art-december-10-2025-the-year-voice-efcc40891a4d" target="_blank" rel="noopener" class="fn-source">medium.com</a></div>
+</div>
+<div class="footnote" id="fn16">
+<span class="fn-number">[16]</span>
+<span class="fn-text">Latency & Cost Reality Check (Real Deployments — Dec 2025)** → Sub-200 ms open-source speech-to-speech is now real on a single L40S. → Hybrid still</span>
+<div class="fn-meta"><a href="https://medium.com/@mshojaei77/voice-ai-voice-agents-the-definitive-2025-state-of-the-art-december-10-2025-the-year-voice-efcc40891a4d" target="_blank" rel="noopener" class="fn-source">medium.com</a></div>
+</div>
+<div class="footnote" id="fn17">
+<span class="fn-number">[17]</span>
+<span class="fn-text">reasoning benchmarks Runs full-duplex speech-to-speech at 195 ms on one GPU Supports 119 text + 19 speech-input + 10 speech-output languages Uses</span>
+<div class="fn-meta"><a href="https://medium.com/@mshojaei77/voice-ai-voice-agents-the-definitive-2025-state-of-the-art-december-10-2025-the-year-voice-efcc40891a4d" target="_blank" rel="noopener" class="fn-source">medium.com</a></div>
+</div>
+<div class="footnote" id="fn18">
+<span class="fn-number">[18]</span>
+<span class="fn-text">But here's the reality: if your voice agent takes longer than 800ms to respond, you're already losing the conversation.</span>
+<div class="fn-meta"><a href="https://www.retellai.com/resources/ai-voice-agent-latency-face-off-2025" target="_blank" rel="noopener" class="fn-source">retellai.com</a></div>
+</div>
+<div class="footnote" id="fn19">
+<span class="fn-number">[19]</span>
+<span class="fn-text">We measured identical FAQ dialogs across all providers, capturing streaming WebSocket timestamps to reveal the truth about time-to-first-token,</span>
+<div class="fn-meta"><a href="https://www.retellai.com/resources/ai-voice-agent-latency-face-off-2025" target="_blank" rel="noopener" class="fn-source">retellai.com</a></div>
+</div>
+<div class="footnote" id="fn20">
+<span class="fn-number">[20]</span>
+<span class="fn-text">Measuring latency where it matters The most important latency metric for conversational AI systems is Time to First Audio (TTFA) — how long it takes</span>
+<div class="fn-meta"><a href="https://sierra.ai/blog/voice-latency" target="_blank" rel="noopener" class="fn-source">sierra.ai</a></div>
+</div>
+<div class="footnote" id="fn21">
+<span class="fn-number">[21]</span>
+<span class="fn-text">for the agent to start speaking after the customer finishes.</span>
+<div class="fn-meta"><a href="https://sierra.ai/blog/voice-latency" target="_blank" rel="noopener" class="fn-source">sierra.ai</a></div>
+</div>
+<div class="footnote" id="fn22">
+<span class="fn-number">[22]</span>
+<span class="fn-text">Human conversation requires 300-500ms response window.</span>
+<div class="fn-meta"><a href="https://introl.com/blog/voice-ai-infrastructure-real-time-speech-agents-asr-tts-guide-2025" target="_blank" rel="noopener" class="fn-source">introl.com</a></div>
+</div>
+<div class="footnote" id="fn23">
+<span class="fn-number">[23]</span>
+<span class="fn-text">Results show that TSLAM, TTE, and T-Synth deliver real-time factors (RTF) below 1.0, supporting enterprise, low-latency telecom deployments.</span>
+<div class="fn-meta"><a href="https://arxiv.org/abs/2508.04721" target="_blank" rel="noopener" class="fn-source">arxiv.org</a></div>
+</div>
+<div class="footnote" id="fn24">
+<span class="fn-number">[24]</span>
+<span class="fn-text">The pipeline combines sentence-level streaming, concurrent processing, and vector-based document retrieval, achieving real-time factors (RTF) below</span>
+<div class="fn-meta"><a href="https://arxiv.org/html/2508.04721v1" target="_blank" rel="noopener" class="fn-source">arxiv.org</a></div>
+</div>
+<div class="footnote" id="fn25">
+<span class="fn-number">[25]</span>
+<span class="fn-text">Even pauses as short as ~300 milliseconds can feel unnatural, while any latency beyond ~1.5 second can rapidly degrade the experience.</span>
+<div class="fn-meta"><a href="https://www.cresta.com/blog/engineering-for-real-time-voice-agent-latency" target="_blank" rel="noopener" class="fn-source">cresta.com</a></div>
+</div>
+<div class="footnote" id="fn26">
+<span class="fn-number">[26]</span>
+<span class="fn-text">Each system component—ASR, LLM, and TTS—contributes its own delay.</span>
+<div class="fn-meta"><a href="https://www.cresta.com/blog/engineering-for-real-time-voice-agent-latency" target="_blank" rel="noopener" class="fn-source">cresta.com</a></div>
+</div>
+<div class="footnote" id="fn27">
+<span class="fn-number">[27]</span>
+<span class="fn-text">Respond quickly and naturally with latency low enough (typically under ~800 ms) to sustain real‑time conversation.</span>
+<div class="fn-meta"><a href="https://www.beconversive.com/blog/best-voice-ai-agents" target="_blank" rel="noopener" class="fn-source">beconversive.com</a></div>
+</div>
+<div class="footnote" id="fn28">
+<span class="fn-number">[28]</span>
+<span class="fn-text">Pipeline latency: STT (100-500ms) + LLM (350ms-1s+) + TTS (75-200ms).</span>
+<div class="fn-meta"><a href="https://introl.com/blog/voice-ai-infrastructure-real-time-speech-agents-asr-tts-guide-2025" target="_blank" rel="noopener" class="fn-source">introl.com</a></div>
+</div>
+<div class="footnote" id="fn29">
+<span class="fn-number">[29]</span>
+<span class="fn-text">Voice AI Infrastructure: Building Real-Time Speech Agents Deepgram delivers speech-to-text in 150 milliseconds.</span>
+<div class="fn-meta"><a href="https://introl.com/blog/voice-ai-infrastructure-real-time-speech-agents-asr-tts-guide-2025" target="_blank" rel="noopener" class="fn-source">introl.com</a></div>
+</div>
+<div class="footnote" id="fn30">
+<span class="fn-number">[30]</span>
+<span class="fn-text">Human conversation operates within a 300-500 millisecond response window.² Delays beyond 500 milliseconds feel unnatural.</span>
+<div class="fn-meta"><a href="https://introl.com/blog/voice-ai-infrastructure-real-time-speech-agents-asr-tts-guide-2025" target="_blank" rel="noopener" class="fn-source">introl.com</a></div>
+</div>
+<h4 class="fn-theme">LLM Call Instrumentation: Token Usage, Prompt/Completion Logging, Cost Tracking</h4>
+<div class="footnote" id="fn31">
+<span class="fn-number">[31]</span>
+<span class="fn-text">influenced decision-making **Cost and efficiency optimization**: Token usage, model selection, and caching strategies directly impact operational</span>
+<div class="fn-meta"><a href="https://www.getmaxim.ai/articles/top-5-ai-agent-observability-platforms-in-2026/" target="_blank" rel="noopener" class="fn-source">getmaxim.ai</a></div>
+</div>
+<div class="footnote" id="fn32">
+<span class="fn-number">[32]</span>
+<span class="fn-text">AI observability platforms track everything from prompt performance and latency to reasoning paths, token usage, and hallucination rates.</span>
+<div class="fn-meta"><a href="https://softcery.com/lab/top-8-observability-platforms-for-ai-agents-in-2025" target="_blank" rel="noopener" class="fn-source">softcery.com</a></div>
+</div>
+<div class="footnote" id="fn33">
+<span class="fn-number">[33]</span>
+<span class="fn-text">thousands of tools across dozens of MCP connectors. *Top features** **Tool call logs:** See when a tool was invoked, the arguments that get passed,</span>
+<div class="fn-meta"><a href="https://www.merge.dev/blog/ai-agent-observability-platforms" target="_blank" rel="noopener" class="fn-source">merge.dev</a></div>
+</div>
+<div class="footnote" id="fn34">
+<span class="fn-number">[34]</span>
+<span class="fn-text">Describes the details of a GenAI completion request including chat history and parameters.</span>
+<div class="fn-meta"><a href="https://opentelemetry.io/docs/specs/semconv/gen-ai/gen-ai-events/" target="_blank" rel="noopener" class="fn-source">opentelemetry.io</a></div>
+</div>
+<div class="footnote" id="fn35">
+<span class="fn-number">[35]</span>
+<span class="fn-text">parameters, tool calls, retrievals, outputs, cost, and latency.</span>
+<div class="fn-meta"><a href="https://www.getmaxim.ai/articles/the-complete-guide-to-ai-agent-monitoring-2025/" target="_blank" rel="noopener" class="fn-source">getmaxim.ai</a></div>
+</div>
+<div class="footnote" id="fn36">
+<span class="fn-number">[36]</span>
+<span class="fn-text">The primary unit of cost is the token, and the primary challenge is attribution.</span>
+<div class="fn-meta"><a href="https://www.traceloop.com/blog/from-bills-to-budgets-how-to-track-llm-token-usage-and-cost-per-user" target="_blank" rel="noopener" class="fn-source">traceloop.com</a></div>
+</div>
+<div class="footnote" id="fn37">
+<span class="fn-number">[37]</span>
+<span class="fn-text">The most effective way to track costs per user is to pass metadata with every API request.</span>
+<div class="fn-meta"><a href="https://www.traceloop.com/blog/from-bills-to-budgets-how-to-track-llm-token-usage-and-cost-per-user" target="_blank" rel="noopener" class="fn-source">traceloop.com</a></div>
+</div>
+<div class="footnote" id="fn38">
+<span class="fn-number">[38]</span>
+<span class="fn-text">token usage, latency, costs, and quality across production deployments.</span>
+<div class="fn-meta"><a href="https://www.getmaxim.ai/articles/top-5-tools-for-monitoring-llm-applications-in-2025/" target="_blank" rel="noopener" class="fn-source">getmaxim.ai</a></div>
+</div>
+<div class="footnote" id="fn39">
+<span class="fn-number">[39]</span>
+<span class="fn-text">LLM observability goes far beyond basic logging, requiring real-time monitoring of prompts and responses, tracking token usage, measuring latency,</span>
+<div class="fn-meta"><a href="https://www.braintrust.dev/articles/top-10-llm-observability-tools-2025" target="_blank" rel="noopener" class="fn-source">braintrust.dev</a></div>
+</div>
+<div class="footnote" id="fn40">
+<span class="fn-number">[40]</span>
+<span class="fn-text">reasons. *Requirement:** Out-of-the-box LLM tracing for (OpenAI and Anthropic) is available starting from sensor version **1.9.563**.</span>
+<div class="fn-meta"><a href="https://docs.groundcover.com/capabilities/llm-observability" target="_blank" rel="noopener" class="fn-source">docs.groundcover.com</a></div>
+</div>
+<div class="footnote" id="fn41">
+<span class="fn-number">[41]</span>
+<span class="fn-text">– The total token consumption during the span.* **Cost** – The estimated call cost in USD.* **User ID** – The ID of the user who made the call.</span>
+<div class="fn-meta"><a href="https://coralogix.com/docs/user-guides/ai-observability/llm-calls/" target="_blank" rel="noopener" class="fn-source">coralogix.com</a></div>
+</div>
+<div class="footnote" id="fn42">
+<span class="fn-number">[42]</span>
+<span class="fn-text">tracing, automated evaluations, drift detection, alerts, dashboards, and OTLP integrations deliver faster diagnosis, explainability, and cost control.</span>
+<div class="fn-meta"><a href="https://www.getmaxim.ai/articles/llm-monitoring-a-complete-guide-for-2025/" target="_blank" rel="noopener" class="fn-source">getmaxim.ai</a></div>
+</div>
+<div class="footnote" id="fn43">
+<span class="fn-number">[43]</span>
+<span class="fn-text">This method captures: **Payloads:** Full prompt and response bodies (supports redaction). **Usage:** Token counts (input, output, total).</span>
+<div class="fn-meta"><a href="https://docs.groundcover.com/capabilities/llm-observability" target="_blank" rel="noopener" class="fn-source">docs.groundcover.com</a></div>
+</div>
+<div class="footnote" id="fn44">
+<span class="fn-number">[44]</span>
+<span class="fn-text">Latency is important to track since the response time from the model can vary based on the inputs passed to the LLM. 3.</span>
+<div class="fn-meta"><a href="https://opentelemetry.io/blog/2024/llm-observability/" target="_blank" rel="noopener" class="fn-source">opentelemetry.io</a></div>
+</div>
+<div class="footnote" id="fn45">
+<span class="fn-number">[45]</span>
+<span class="fn-text">Ingested usage and cost are prioritized over inferred usage and cost: Via the Daily Metrics API, you can retrieve aggregated daily usage and cost</span>
+<div class="fn-meta"><a href="https://langfuse.com/docs/observability/features/token-and-cost-tracking" target="_blank" rel="noopener" class="fn-source">langfuse.com</a></div>
+</div>
+<div class="footnote" id="fn46">
+<span class="fn-number">[46]</span>
+<span class="fn-text">It’s vital to keep track of how often LLMs are being used for usage and cost tracking. 2.</span>
+<div class="fn-meta"><a href="https://opentelemetry.io/blog/2024/llm-observability/" target="_blank" rel="noopener" class="fn-source">opentelemetry.io</a></div>
+</div>
+<div class="footnote" id="fn47">
+<span class="fn-number">[47]</span>
+<span class="fn-text">Usage and cost can be tracked on observations of type `generation` and `embedding`. **Usage details**: number of units consumed per usage type **Cost</span>
+<div class="fn-meta"><a href="https://langfuse.com/docs/observability/features/token-and-cost-tracking" target="_blank" rel="noopener" class="fn-source">langfuse.com</a></div>
+</div>
+<h4 class="fn-theme">Agent State Observability: Context Window Usage, Memory Utilization, Tool Call Patterns</h4>
+<div class="footnote" id="fn48">
+<span class="fn-number">[48]</span>
+<span class="fn-text">A single session can involve nested model calls, external APIs, and long-running reasoning chains that shift dynamically based on context.</span>
+<div class="fn-meta"><a href="https://www.getmaxim.ai/articles/the-complete-guide-to-ai-agent-monitoring-2025/" target="_blank" rel="noopener" class="fn-source">getmaxim.ai</a></div>
+</div>
+<div class="footnote" id="fn49">
+<span class="fn-number">[49]</span>
+<span class="fn-text">A single user query can trigger dozens or hundreds of intermediate steps, each involving LLM calls, tool executions, retrievals, and decision points.</span>
+<div class="fn-meta"><a href="https://www.getmaxim.ai/articles/the-5-best-agent-debugging-platforms-in-2026/" target="_blank" rel="noopener" class="fn-source">getmaxim.ai</a></div>
+</div>
+<div class="footnote" id="fn50">
+<span class="fn-number">[50]</span>
+<span class="fn-text">Integration failures cascade through multi-step workflows, creating compound errors invisible in individual components.</span>
+<div class="fn-meta"><a href="https://www.getmaxim.ai/articles/top-5-tools-for-monitoring-llm-applications-in-2025/" target="_blank" rel="noopener" class="fn-source">getmaxim.ai</a></div>
+</div>
+<div class="footnote" id="fn51">
+<span class="fn-number">[51]</span>
+<span class="fn-text">According to TrueFoundry's observability research, agents fail through logical errors rather than technical crashes.</span>
+<div class="fn-meta"><a href="https://www.getmaxim.ai/articles/best-tools-to-monitor-and-debug-ai-agents-in-production/" target="_blank" rel="noopener" class="fn-source">getmaxim.ai</a></div>
+</div>
+<div class="footnote" id="fn52">
+<span class="fn-number">[52]</span>
+<span class="fn-text">A strong setup tracks **system health** (availability, latency, dependencies) *and* **agent behavior** (accuracy, drift, cost).</span>
+<div class="fn-meta"><a href="https://uptimerobot.com/knowledge-hub/monitoring/ai-agent-monitoring-best-practices-tools-and-metrics/" target="_blank" rel="noopener" class="fn-source">uptimerobot.com</a></div>
+</div>
+<div class="footnote" id="fn53">
+<span class="fn-number">[53]</span>
+<span class="fn-text">According to Microsoft Azure research, agent observability requires tracking not just outputs but reasoning processes, tool selection, and multi-agent</span>
+<div class="fn-meta"><a href="https://www.getmaxim.ai/articles/top-5-tools-for-monitoring-and-improving-ai-agent-reliability-2026/" target="_blank" rel="noopener" class="fn-source">getmaxim.ai</a></div>
+</div>
+<h4 class="fn-theme">Evaluation Frameworks for Measuring Agent Accuracy and Hallucination Rates</h4>
+<div class="footnote" id="fn54">
+<span class="fn-number">[54]</span>
+<span class="fn-text">multiple chains and models for a single user request, requiring detailed trace visibility at each step **Quality evaluation beyond metrics**: Success</span>
+<div class="fn-meta"><a href="https://www.getmaxim.ai/articles/top-5-ai-agent-observability-platforms-in-2026/" target="_blank" rel="noopener" class="fn-source">getmaxim.ai</a></div>
+</div>
+<div class="footnote" id="fn55">
+<span class="fn-number">[55]</span>
+<span class="fn-text">conventions for observability of generative AI agentic systems.</span>
+<div class="fn-meta"><a href="https://github.com/open-telemetry/semantic-conventions/issues/2664" target="_blank" rel="noopener" class="fn-source">github.com</a></div>
+</div>
+<div class="footnote" id="fn56">
+<span class="fn-number">[56]</span>
+<span class="fn-text">Research from Stanford's Center for Research on Foundation Models demonstrates that systematic evaluation reduces production failures by up to 60%</span>
+<div class="fn-meta"><a href="https://www.getmaxim.ai/articles/top-5-ai-evals-tools-for-genai-systems-in-2026/" target="_blank" rel="noopener" class="fn-source">getmaxim.ai</a></div>
+</div>
+<div class="footnote" id="fn57">
+<span class="fn-number">[57]</span>
+<span class="fn-text">Maxim’s observability provides real-time production logging, automated quality checks, alerts, and dataset curation integrated with tracing.</span>
+<div class="fn-meta"><a href="https://medium.com/@kamyashah2018/debugging-complex-multi-agent-systems-best-practices-for-observability-a523fbfa8f99" target="_blank" rel="noopener" class="fn-source">medium.com</a></div>
+</div>
+<div class="footnote" id="fn58">
+<span class="fn-number">[58]</span>
+<span class="fn-text">LLM observability tools directly addresses these needs, helping identify and prevent common LLM errors and issues: Hallucinations and poor grounding</span>
+<div class="fn-meta"><a href="https://logz.io/blog/top-llm-observability-tools/" target="_blank" rel="noopener" class="fn-source">logz.io</a></div>
+</div>
+<div class="footnote" id="fn59">
+<span class="fn-number">[59]</span>
+<span class="fn-text">drift detection. **Galileo** specializes in hallucination detection with Luna guard models. **AgentOps** provides lightweight monitoring for over 400</span>
+<div class="fn-meta"><a href="https://www.getmaxim.ai/articles/top-5-tools-for-monitoring-and-improving-ai-agent-reliability-2026/" target="_blank" rel="noopener" class="fn-source">getmaxim.ai</a></div>
+</div>
+<div class="footnote" id="fn60">
+<span class="fn-number">[60]</span>
+<span class="fn-text">To evaluate the system, we built a dataset of 500 human-recorded telecom questions from RFCs, simulating real telecom agent queries.</span>
+<div class="fn-meta"><a href="https://arxiv.org/abs/2508.04721" target="_blank" rel="noopener" class="fn-source">arxiv.org</a></div>
+</div>
+<h4 class="fn-theme">Production Debugging Techniques for Voice Interruptions and Turn-Taking Issues</h4>
+<div class="footnote" id="fn61">
+<span class="fn-number">[61]</span>
+<span class="fn-text">time from when a user finishes speaking to when they hear the AI's response. (Voice Agent Pricing Calculator) In human conversation, responses</span>
+<div class="fn-meta"><a href="https://www.retellai.com/resources/ai-voice-agent-latency-face-off-2025" target="_blank" rel="noopener" class="fn-source">retellai.com</a></div>
+</div>
+<h4 class="fn-theme">Modern Observability Stacks (OpenTelemetry, LangSmith, Arize, Custom Solutions)</h4>
+<div class="footnote" id="fn62">
+<span class="fn-number">[62]</span>
+<span class="fn-text">Teams wanting an open-source, self-hostable monitoring layer with strong tracing, cost tracking, and collaboration. **Arize Phoenix:** RAG-heavy apps</span>
+<div class="fn-meta"><a href="https://www.zenml.io/blog/best-llm-monitoring-tools" target="_blank" rel="noopener" class="fn-source">zenml.io</a></div>
+</div>
+<div class="footnote" id="fn63">
+<span class="fn-number">[63]</span>
+<span class="fn-text">that need local-first tracing, offline evals, and rich visual analysis inside notebooks. **Datadog LLM Observability:** Enterprises already using</span>
+<div class="fn-meta"><a href="https://www.zenml.io/blog/best-llm-monitoring-tools" target="_blank" rel="noopener" class="fn-source">zenml.io</a></div>
+</div>
+<div class="footnote" id="fn64">
+<span class="fn-number">[64]</span>
+<span class="fn-text">Datadog who want LLM performance tied directly to infra and service metrics. **W&B Weave:** ML teams using W&B who want easy auto-logging, experiment</span>
+<div class="fn-meta"><a href="https://www.zenml.io/blog/best-llm-monitoring-tools" target="_blank" rel="noopener" class="fn-source">zenml.io</a></div>
+</div>
+<div class="footnote" id="fn65">
+<span class="fn-number">[65]</span>
+<span class="fn-text">LangSmith emerged in 2023 to solve this exact problem—and by November 2025, it's helping teams at Klarna, Elastic, and thousands of other companies</span>
+<div class="fn-meta"><a href="https://www.articsledge.com/post/langsmith" target="_blank" rel="noopener" class="fn-source">articsledge.com</a></div>
+</div>
+<div class="footnote" id="fn66">
+<span class="fn-number">[66]</span>
+<span class="fn-text">LangSmith demonstrated exceptional efficiency with virtually no measurable overhead, making it ideal for performance-critical production environments.</span>
+<div class="fn-meta"><a href="https://research.aimultiple.com/agentic-monitoring/" target="_blank" rel="noopener" class="fn-source">research.aimultiple.com</a></div>
+</div>
+<div class="footnote" id="fn67">
+<span class="fn-number">[67]</span>
+<span class="fn-text">Laminar introduced minimal overhead at 5%, making it highly suitable for production environments where performance is critical.</span>
+<div class="fn-meta"><a href="https://research.aimultiple.com/agentic-monitoring/" target="_blank" rel="noopener" class="fn-source">research.aimultiple.com</a></div>
+</div>
+<div class="footnote" id="fn68">
+<span class="fn-number">[68]</span>
+<span class="fn-text">AgentOps and Langfuse showed moderate overhead at 12% and 15% respectively, representing a reasonable trade-off between observability features and</span>
+<div class="fn-meta"><a href="https://research.aimultiple.com/agentic-monitoring/" target="_blank" rel="noopener" class="fn-source">research.aimultiple.com</a></div>
+</div>
+<div class="footnote" id="fn69">
+<span class="fn-number">[69]</span>
+<span class="fn-text">Lifecycle Management 4. **Arize AI** – Enterprise ML Observability with LLM Focus 5. **LangSmith** – Developer-Centric Agent Tracing by LangChain 6.</span>
+<div class="fn-meta"><a href="https://o-mega.ai/articles/top-5-ai-agent-observability-platforms-the-ultimate-2026-guide" target="_blank" rel="noopener" class="fn-source">o-mega.ai</a></div>
+</div>
+<div class="footnote" id="fn70">
+<span class="fn-number">[70]</span>
+<span class="fn-text">LangChain—through Python/TypeScript SDKs and OpenTelemetry support **Pricing starts free** (5,000 traces/month on Developer plan) and scales to</span>
+<div class="fn-meta"><a href="https://www.articsledge.com/post/langsmith" target="_blank" rel="noopener" class="fn-source">articsledge.com</a></div>
+</div>
+</div>
+
+</body>
+</html>
