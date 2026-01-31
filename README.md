@@ -28,7 +28,9 @@ Synthesis (LLM writes transitions, facts stay locked)
   ↓
 HTML Report
 ```
-For more detail: **[ARCHITECTURE.md](./ARCHITECTURE.md)** 
+#### For more detail: [ARCHITECTURE.md](./ARCHITECTURE.md)
+
+
 ---
 
 ## Quick Start
